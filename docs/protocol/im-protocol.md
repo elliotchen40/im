@@ -143,6 +143,35 @@ im://pair?u=<公网地址>&c=<一次性配对码>
 **文件即 IPC**：CLI 与 daemon 是**两个进程**，用 `data/pairing.json` 共享状态 ——
 CLI 写码 → daemon 校验并标记 `usedAt` → CLI 轮询到 `usedAt` 就打印成功并退出。
 
+### 3.5 `POST /im/history` —— 拉取历史（app 下拉加载更早消息）
+
+供 app 在下拉时加载 `outbox` 保留窗口之外、落在 `dialogues` 表里的历史（含用户自己发的 + 机器人回复 + 主动关怀）。
+
+请求：
+```json
+{ "beforeId": 120, "limit": 30 }
+```
+- `beforeId?: number` —— 只返回 `id < beforeId` 的消息（更早的）；不传则取最新一页。
+- `limit?: number` —— 条数上限，默认 30，最大 100。
+
+响应：
+```json
+{
+  "ret": 0,
+  "msgs": [
+    { "seq": 100, "channelUserId": "owner", "text": "…", "kind": "reply",
+      "ts": 1766900000000, "serverMsgId": "100" }
+  ]
+}
+```
+
+- `msgs` 按 `seq`（即 dialogues.id）**升序**排列，与 `/im/sync` 的 `msgs` 形态一致，
+  客户端可直接复用同一种 `ChatMessage` 结构。
+- `kind`：`user`（用户自己发的）/ `reply`（机器人回复）/ `proactive`（主动关怀）。
+- 数据源是 per-SOUL `dialogues` 表（不是 outbox）；`beforeId` 语义对应 dialogues 的自增主键 `id`。
+- 无更多历史时返回空 `msgs: []`，客户端应据此停止继续下拉。
+- 需要 `Authorization: Bearer`（与 `/im/send`、`/im/sync` 相同）。
+
 ---
 
 ## 4. 投递语义

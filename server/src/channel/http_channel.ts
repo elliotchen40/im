@@ -77,6 +77,19 @@ export interface HttpChannelOptions {
   longPollTimeoutMs?: number;
   /** 单用户模式下的固定用户 ID；P2 做多用户时改为按 token/deviceId 映射 */
   defaultUserId?: string;
+  /**
+   * 历史消息读取回调（/im/history 用）—— 由入口层注入，内部访问 per-SOUL DB。
+   * 这样 HttpChannel 保持不依赖 DB，符合「Bot/通道不感知渠道」边界。
+   * 返回的 msg 需与 outbox 的记录形态一致（含 seq / channelUserId / text / kind / ts / serverMsgId）。
+   */
+  historyReader?: (opts: { beforeId?: number; limit: number }) => Array<{
+    seq: number;
+    channelUserId: string;
+    text: string;
+    kind: string;
+    ts: number;
+    serverMsgId: string;
+  }>;
 }
 
 export class HttpChannel implements Channel {
@@ -88,6 +101,21 @@ export class HttpChannel implements Channel {
   private readonly host: string;
   private readonly longPollTimeoutMs: number;
   private readonly defaultUserId: string;
+  private historyReader?: HttpChannelOptions["historyReader"];
+
+  /** 入口层在 soulDb 就绪后注入历史读取回调（/im/history 用） */
+  setHistoryReader(
+    reader: (opts: { beforeId?: number; limit: number }) => Array<{
+      seq: number;
+      channelUserId: string;
+      text: string;
+      kind: string;
+      ts: number;
+      serverMsgId: string;
+    }>,
+  ): void {
+    this.historyReader = reader;
+  }
 
   private server: http.Server | null = null;
   private running = false;
@@ -116,9 +144,15 @@ export class HttpChannel implements Channel {
     this.host = opts.host ?? "0.0.0.0";
     this.longPollTimeoutMs = opts.longPollTimeoutMs ?? DEFAULT_LONG_POLL_TIMEOUT_MS;
     this.defaultUserId = opts.defaultUserId ?? "owner";
+    this.historyReader = opts.historyReader;
   }
 
   // ---------------------------------------------------------------- 持久化
+
+  /** 公开当前单用户模式的 userId（入口层 /im/history 回调要用） */
+  get userId(): string {
+    return this.defaultUserId;
+  }
 
   private get inboxPath(): string {
     return path.join(this.dataDir, "inbox.jsonl");
@@ -316,6 +350,7 @@ export class HttpChannel implements Channel {
       }
       if (url.pathname === "/im/send") return await this.handleSend(req, res);
       if (url.pathname === "/im/sync") return await this.handleSync(req, res);
+      if (url.pathname === "/im/history") return await this.handleHistory(req, res);
       return this.json(res, 404, { ret: -1, errmsg: "not found" });
     } catch (err) {
       console.error(`[channel/im] 请求处理异常 ${req.method} ${url.pathname}: ${describe(err)}`);
@@ -408,6 +443,25 @@ export class HttpChannel implements Channel {
       ? String(pending[pending.length - 1].seq)
       : String(Math.max(since, this.outboxSeq));
     this.json(res, 200, { ret: 0, cursor, msgs: pending });
+  }
+
+  /**
+   * 历史：app 下拉加载更早消息（分页）。
+   * 入参（POST body）：
+   *   beforeId?: number  —— 只返回 id < beforeId 的消息（更早的）；不传则取最新一页
+   *   limit?: number     —— 条数上限（默认 30，最大 100）
+   * 出参：{ ret, msgs }，msgs 按 id 升序排列（与 sync 的 outbox 形态一致）。
+   */
+  private async handleHistory(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+    const body = await this.readBody(req);
+    const beforeId = typeof body.beforeId === "number" ? body.beforeId : undefined;
+    const limitRaw = typeof body.limit === "number" ? body.limit : 30;
+    const limit = Math.max(1, Math.min(100, Math.floor(limitRaw)));
+    if (!this.historyReader) {
+      return this.json(res, 200, { ret: 0, msgs: [] });
+    }
+    const rows = this.historyReader({ beforeId, limit });
+    this.json(res, 200, { ret: 0, msgs: rows });
   }
 
   // ------------------------------------------------------------------ 工具

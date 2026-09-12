@@ -38,6 +38,13 @@ export interface SendResp {
   errmsg?: string;
 }
 
+/** POST /im/history 响应 */
+export interface HistoryResp {
+  ret: number;
+  msgs: SyncMsg[];
+  errmsg?: string;
+}
+
 interface SyncReq {
   cursor: string;
 }
@@ -45,6 +52,11 @@ interface SyncReq {
 interface SendReq {
   clientMsgId: string;
   text: string;
+}
+
+interface HistoryReq {
+  beforeId?: number;
+  limit?: number;
 }
 
 export class ImClient {
@@ -84,6 +96,13 @@ export class ImClient {
     const body: SendReq = { clientMsgId: clientMsgId, text: text };
     const raw: string = await this.post('/im/send', JSON.stringify(body), 15000);
     return JSON.parse(raw) as SendResp;
+  }
+
+  /** 拉取历史（下拉加载更早消息）；beforeId 不传则取最新一页 */
+  async history(beforeId?: number, limit: number = 30): Promise<HistoryResp> {
+    const body: HistoryReq = { beforeId: beforeId, limit: limit };
+    const raw: string = await this.post('/im/history', JSON.stringify(body), 15000);
+    return JSON.parse(raw) as HistoryResp;
   }
 
   private async post(path: string, json: string, readTimeoutMs: number): Promise<string> {

@@ -13,7 +13,7 @@ import { common } from '@kit.AbilityKit';
 import { window } from '@kit.ArkUI';
 import { AppConfig } from '../services/AppConfig';
 import { PhotoService } from '../services/PhotoService';
-import { ImClient, SendResp, SyncMsg, SyncResp, newClientMsgId } from '../services/ImClient';
+import { ImClient, SendResp, SyncMsg, SyncResp, HistoryResp, newClientMsgId } from '../services/ImClient';
 import { PairPayload, PairResult, pairWithServer, parsePairPayload, scanOnce } from '../services/Pairing';
 import { ChatMessage, MessageKind } from '../model/Message';
 
@@ -47,10 +47,19 @@ struct Index {
   // + 号附件面板
   @State attachSheetOpen: boolean = false;
 
+  // 历史加载状态
+  @State loadingHistory: boolean = false;
+  @State hasMoreHistory: boolean = true;
+
+  // 收发状态（顶栏显示）
+  @State sendState: string = '';
+  @State recvState: string = '';
+
   private client: ImClient | null = null;
   private cursor: string = '';
   private running: boolean = false;
   private scroller: Scroller = new Scroller();
+  private oldestId: number = 0; // 当前消息列表里最老的 id（用于下拉分页）
 
   aboutToAppear(): void {
     const ctx: common.Context | undefined = this.getUIContext().getHostContext();
@@ -128,6 +137,56 @@ struct Index {
   private onServerMessage(m: SyncMsg): void {
     this.settleOldestPending();
     this.messages.push(new ChatMessage(m.serverMsgId, m.text, false, m.kind, m.ts));
+    this.recvState = '已收到回复';
+    // 记录当前最老 id（用于下拉分页）—— 只在首次有消息时初始化
+    if (this.oldestId === 0) {
+      this.oldestId = m.seq;
+    }
+  }
+
+  /** 下拉加载更早历史：取 id < oldestId 的消息，插到列表头部 */
+  private async loadHistory(): Promise<void> {
+    const client: ImClient | null = this.client;
+    if (client === null || this.loadingHistory || !this.hasMoreHistory) {
+      return;
+    }
+    this.loadingHistory = true;
+    try {
+      const resp: HistoryResp = await client.history(this.oldestId === 0 ? undefined : this.oldestId, 30);
+      if (resp.ret !== 0) {
+        this.toast('历史加载失败');
+        return;
+      }
+      const older: SyncMsg[] = resp.msgs;
+      if (older.length === 0) {
+        this.hasMoreHistory = false;
+        return;
+      }
+      // 插到头部；避免重复（按 serverMsgId 去重）
+      const known = new Set<string>();
+      for (const m of this.messages) {
+        known.add(m.id);
+      }
+      const fresh: SyncMsg[] = older.filter((m) => !known.has(m.serverMsgId));
+      if (fresh.length === 0) {
+        this.hasMoreHistory = false;
+        return;
+      }
+      const head: ChatMessage[] = [];
+      for (const m of fresh) {
+        head.push(new ChatMessage(m.serverMsgId, m.text, false, m.kind, m.ts));
+      }
+      this.messages = head.concat(this.messages);
+      this.oldestId = fresh[0].seq; // 更新到更早
+      // 下拉后停在原地（不跳动）；head 里至少 1 条
+      if (this.messages.length > fresh.length) {
+        this.scroller.scrollToIndex(fresh.length);
+      }
+    } catch (e) {
+      this.toast('历史加载失败');
+    } finally {
+      this.loadingHistory = false;
+    }
   }
 
   private settleOldestPending(): void {
@@ -211,15 +270,36 @@ struct Index {
     this.inputText = '';
     this.messages.push(new ChatMessage(id, text, true, MessageKind.REPLY, Date.now(), true));
     this.scrollToBottom();
+    this.sendState = '发送中…';
     try {
       const resp: SendResp = await client.send(text, id);
-      if (resp.ret !== 0) {
+      if (resp.ret === 0) {
+        // send 回 200 即认为已送达服务端（不是等机器人回复）
+        this.markSent(id);
+        this.sendState = '';
+        this.recvState = '等待回复…';
+      } else {
         this.markFailed(id);
+        this.sendState = '发送失败';
         this.toast('服务端拒绝：' + (resp.errmsg !== undefined ? resp.errmsg : '未知原因'));
       }
     } catch (e) {
       this.markFailed(id);
+      this.sendState = '发送失败';
       this.toast('发送失败，请检查网络');
+    }
+  }
+
+  /** 标记某条乐观消息为已送达（不再显示「发送中…」） */
+  private markSent(id: string): void {
+    for (let i = 0; i < this.messages.length; i++) {
+      const msg: ChatMessage = this.messages[i];
+      if (msg.id === id) {
+        msg.pending = false;
+        msg.failed = false;
+        this.messages.splice(i, 1, msg);
+        return;
+      }
     }
   }
 
@@ -463,6 +543,18 @@ struct Index {
     .width('100%')
     .height('100%')
     .backgroundColor(this.chatBgPath.length > 0 ? Color.Transparent : $r('app.color.chat_bg'))
+
+    // 个人资料编辑面板 + 附件面板 —— 绑在根 Column 上（确保可点击弹出）
+    .bindSheet($$this.profileDialogOpen, this.profileDialogBuilder(), {
+      height: 460,
+      dragBar: true,
+      title: { title: '编辑个人资料' }
+    })
+    .bindSheet($$this.attachSheetOpen, this.attachSheetBuilder(), {
+      height: 240,
+      dragBar: true,
+      title: { title: '添加附件' }
+    })
   }
 
   // ----------------------------------------------------------- 聊天主面板
@@ -493,10 +585,18 @@ struct Index {
 
         Blank()
 
-        // 右侧：状态文字 + 重新配对
-        Text(this.status)
-          .fontSize(12)
-          .fontColor($r('app.color.text_secondary'))
+        // 右侧：连接状态 + 收发状态 + 重新配对（紧凑展示）
+        Column() {
+          Text(this.status)
+            .fontSize(12)
+            .fontColor($r('app.color.text_secondary'))
+          Text(this.sendState.length > 0 ? this.sendState : this.recvState)
+            .fontSize(10)
+            .fontColor($r('app.color.text_secondary'))
+            .margin({ top: 2 })
+        }
+        .alignItems(HorizontalAlign.End)
+
         Text('重新配对')
           .fontSize(12)
           .fontColor('#1AAD19')
@@ -535,6 +635,11 @@ struct Index {
         .layoutWeight(1)
         .width('100%')
         .backgroundColor(Color.Transparent)
+        .onReachStart(() => {
+          // 下拉到最顶 → 加载更早历史
+          this.loadHistory();
+        })
+        .edgeEffect(EdgeEffect.Spring)
       }
       .layoutWeight(1)
       .width('100%')
@@ -577,20 +682,6 @@ struct Index {
     }
     .width('100%')
     .height('100%')
-
-    // 个人资料编辑面板（绑在根 Column 上）
-    .bindSheet($$this.profileDialogOpen, this.profileDialogBuilder(), {
-      height: 460,
-      dragBar: true,
-      title: { title: '编辑个人资料' }
-    })
-
-    // + 号附件面板
-    .bindSheet($$this.attachSheetOpen, this.attachSheetBuilder(), {
-      height: 240,
-      dragBar: true,
-      title: { title: '添加附件' }
-    })
   }
 
   // -------------------------------------------------------- 个人资料 sheet

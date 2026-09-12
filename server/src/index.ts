@@ -10,6 +10,10 @@ import { parseSoulName, getSoulDataDir, resolveSoulDataDir } from "./memory/soul
 import fs from "node:fs";
 import path from "node:path";
 
+function describe(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 async function loadSystemPromptFromEnv(): Promise<string> {
   let systemPrompt = process.env.SYSTEM_PROMPT ?? "";
   if (process.env.SYSTEM_PROMPT_FILE) {
@@ -162,6 +166,41 @@ async function main(): Promise<void> {
   const currentSoul = parseSoulName(promptFile);  // 严格匹配，不静默 fallback
   const soulDb: MemoryDB = init_soul_db(currentSoul);
   console.log(`[memory] shared DB + soul DB[${currentSoul}] 已初始化（from ${promptFile}）`);
+
+  // === /im/history 历史读取回调注入（soulDb 已就绪）===
+  // 注意：这里不能用 `this`（箭头函数捕获的是 main() 的 this，undefined）——
+  // 把 defaultUserId 提前提为局部 const。
+  const ownerUserId = channel.userId ?? "owner";
+  channel.setHistoryReader(({ beforeId, limit }) => {
+    try {
+      const rows = soulDb.raw
+        .prepare(
+          "SELECT id, session_id AS sessionId, user_id AS userId, channel, role, content, initiator, created_at AS createdAt FROM dialogues ORDER BY id DESC LIMIT ?",
+        )
+        .all(limit) as Array<{
+        id: number;
+        role: string;
+        content: string;
+        initiator: string | null;
+        createdAt: string;
+      }>;
+      // 只取 beforeId 之前（更早）的
+      const filtered = beforeId === undefined ? rows : rows.filter((r) => r.id < beforeId);
+      // 按 id 升序返回（与 outbox 顺序一致）
+      filtered.sort((a, b) => a.id - b.id);
+      return filtered.map((r) => ({
+        seq: r.id,
+        channelUserId: r.initiator === "assistant" ? ownerUserId : r.initiator ?? ownerUserId,
+        text: r.content,
+        kind: r.role === "assistant" ? "reply" : "user",
+        ts: new Date(r.createdAt).getTime(),
+        serverMsgId: String(r.id),
+      }));
+    } catch (err) {
+      console.warn(`[channel/im] history 读取失败: ${describe(err)}`);
+      return [];
+    }
+  });
 
   // P17: 启动自检 (a) SOUL 文件存在
   if (!fs.existsSync(promptFile)) {

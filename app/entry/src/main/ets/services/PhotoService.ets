@@ -12,6 +12,7 @@
 import { common } from '@kit.AbilityKit';
 import { photoAccessHelper } from '@kit.MediaLibraryKit';
 import { fileIo } from '@kit.CoreFileKit';
+import fs from '@ohos.file.fs';
 
 export interface PickedPhoto {
   /** 拷贝后位于 app cache 内的绝对路径；空字符串表示失败 */
@@ -23,7 +24,13 @@ export interface PickedPhoto {
 export class PhotoService {
   /**
    * 拉起系统相册选择器，复制到 app cache，返回最终路径。
-   * `prefix` 用于区分用途（avatar / chatBg），避免头像和背景覆盖彼此。
+   * `prefix` 用于区分用途（avatar / chatBg / attach），避免覆盖彼此。
+   *
+   * 为什么不能直接 copyFileSync(src, dest)：
+   *   picker 返回的是 `file://media/Photo/...` 形式的 uri，不是普通文件系统路径，
+   *   fileIo.copyFileSync 不接受它（报 no such file or directory）。
+   *   正确方式：先确保 cacheDir 存在，再用 fs.openSync 按 uri 打开 → fs.copyFileSync
+   *   从 fd 拷到 dest。
    */
   static async pickAndCache(context: common.Context, prefix: string): Promise<PickedPhoto> {
     try {
@@ -38,9 +45,14 @@ export class PhotoService {
       }
       const src = uris[0];
       const cacheDir = context.cacheDir;
+      if (!fs.accessSync(cacheDir)) {
+        fs.mkdirSync(cacheDir);
+      }
       const stamp = Date.now().toString(36);
       const dest = cacheDir + '/' + prefix + '_' + stamp + '.jpg';
-      fileIo.copyFileSync(src, dest);
+      // fs.copyFile（异步）接受 src: string | number | File —— 传 uri 字符串即可，
+      // 内部自己打开 file:// 协议；比 copyFileSync 更稳（后者对 uri 的约束更严）。
+      await fs.copyFile(src, dest);
       return { path: dest, error: '' };
     } catch (e) {
       return { path: '', error: (e as Error).message };
