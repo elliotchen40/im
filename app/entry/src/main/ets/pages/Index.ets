@@ -545,17 +545,25 @@ struct Index {
     .width('100%')
     .height('100%')
     .backgroundColor(this.chatBgPath.length > 0 ? Color.Transparent : $r('app.color.chat_bg'))
+    // 让输入法展开时挤压父布局保持稳定，避免顶栏被顶上去
+    .expandSafeArea([SafeAreaType.KEYBOARD], [SafeAreaEdge.BOTTOM])
+    .resizable(true)
 
     // 个人资料编辑面板 + 附件面板 —— 绑在根 Column 上（确保可点击弹出）
     .bindSheet($$this.profileDialogOpen, this.profileDialogBuilder(), {
-      height: 460,
+      height: SheetSize.FIT_CONTENT,
       dragBar: true,
-      title: { title: '编辑个人资料' }
+      title: { title: '编辑个人资料' },
+      // 关键：keyboardAvoidMode 让 sheet 自己避让键盘，主布局不动
+      keyboardAvoidMode: KeyboardAvoidMode.NONE,
+      showClose: false
     })
     .bindSheet($$this.attachSheetOpen, this.attachSheetBuilder(), {
-      height: 240,
+      height: SheetSize.FIT_CONTENT,
       dragBar: true,
-      title: { title: '添加附件' }
+      title: { title: '添加附件' },
+      keyboardAvoidMode: KeyboardAvoidMode.NONE,
+      showClose: false
     })
   }
 
@@ -774,7 +782,6 @@ struct Index {
       .width('100%')
     }
     .width('100%')
-    .height('100%')
     .padding(20)
     .backgroundColor(Color.White)
   }

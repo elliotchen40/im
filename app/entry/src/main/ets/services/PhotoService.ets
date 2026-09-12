@@ -50,9 +50,25 @@ export class PhotoService {
       }
       const stamp = Date.now().toString(36);
       const dest = cacheDir + '/' + prefix + '_' + stamp + '.jpg';
-      // fs.copyFile（异步）接受 src: string | number | File —— 传 uri 字符串即可，
-      // 内部自己打开 file:// 协议；比 copyFileSync 更稳（后者对 uri 的约束更严）。
-      await fs.copyFile(src, dest);
+      // HarmonyOS NEXT 上 picker 返回的 file://media/Photo/... uri 不能直接给 fs.copyFile
+      // （报 no such file or directory）。最稳的做法：openSync 按 uri 打开 → 逐块读 → writeSync
+      // 写到自己 cache 的目标文件 —— 完全绕开 uri 解析层。
+      const srcFile = fs.openSync(src, fs.OpenMode.READ_ONLY);
+      const dstFile = fs.openSync(dest, fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
+      const bufSize = 64 * 1024;
+      const buf = new ArrayBuffer(bufSize);
+      try {
+        while (true) {
+          const n = fs.readSync(srcFile, buf);
+          if (n === undefined || n <= 0) {
+            break;
+          }
+          fs.writeSync(dstFile, buf, n);
+        }
+      } finally {
+        fs.closeSync(srcFile);
+        fs.closeSync(dstFile);
+      }
       return { path: dest, error: '' };
     } catch (e) {
       return { path: '', error: (e as Error).message };
