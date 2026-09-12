@@ -11,7 +11,8 @@
 
 | 需要 | 说明 | 必需? |
 |---|---|---|
-| 一台**常开**的机器 | Linux 小主机 / 树莓派 / 云主机。MacBook 也行,但合盖休眠手机就连不上 | ✅ |
+| 生产机 **112**(`10.168.3.112`) | 常开小主机;服务端生产环境(systemd + cloudflared 隧道),路径 `/opt/im/server` | ✅ |
+| 开发机(`10.168.3.180` 容器 `fanny`) | 服务端开发/联调,容器内路径 `/.openclaw/team-shared/projects/im` | ✅ |
 | MacBook + **DevEco Studio** | 编译 HAP 用;需登录华为开发者账号(个人实名,免费) | ✅ |
 | 一台鸿蒙手机 | HarmonyOS NEXT(API 12+) | ✅ |
 | LLM API key | 任意 OpenAI 兼容(DeepSeek / 智谱 / MiniMax…) | ✅ |
@@ -21,8 +22,8 @@
 先想清楚你要哪种连接方式:
 
 ```
-方案 A(先跑通,最快)   Mac/服务器  ←──同一 Wi-Fi──→  手机       # 不需要隧道、不需要域名
-方案 B(最终形态)       服务器 + cloudflared ──→ https://你的域名  # 手机在外面也能用
+方案 A(先跑通,最快)   开发机 10.168.3.180 ←──同一局域网──→ 手机   # 不需要隧道、不需要域名
+方案 B(最终形态)       112(10.168.3.112) + cloudflared ──→ https://你的域名
 ```
 
 **建议先走 A 把端到端跑通,再升级到 B。** 这样出问题时变量少。
@@ -33,9 +34,23 @@
 
 ### 1.1 把项目放到目标机器
 
+三台机器的角色与路径(完整版见 `DEPLOY.md §机器拓扑`):
+
+| 机器 | 地址 | 服务端代码路径 |
+|---|---|---|
+| 开发机 | `10.168.3.180`(容器 `fanny`) | 容器内 `/.openclaw/team-shared/projects/im` |
+| 生产机 **112** | `10.168.3.112` | `/opt/im/server` |
+| MacBook | — | 只编译鸿蒙 app,不跑服务端 |
+
+生产机(112)首次落代码:
+
 ```bash
-# 假设放到 /opt/im
-sudo mkdir -p /opt/im && sudo cp -r <项目路径>/server /opt/im/
+# 从 MacBook / 开发机把 server/ 同步过去(**不要带 data/**)
+rsync -a --exclude data/ server/ <user>@10.168.3.112:/opt/im/server/
+# 或直接在 112 上:
+#   git clone git@github.com:elliotchen40/im.git /opt/im-src \
+#     && sudo mkdir -p /opt/im && sudo cp -r /opt/im-src/server /opt/im/
+ssh <user>@10.168.3.112 'cd /opt/im/server && npm install'
 cd /opt/im/server
 ```
 
@@ -102,7 +117,7 @@ npm run dev:verify   # 终端 2:用 .env.verify 起 daemon(独立 DB data/verify
 
 ### 方案 A:局域网(先跑通,推荐第一步)
 
-1. 查服务器 IP:`ip addr | grep 'inet '`(Mac 上是 `ipconfig getifaddr en0`)
+1. 服务端 IP:生产机 112 = `10.168.3.112`,开发机 = `10.168.3.180`(同一局域网,手机连同一 Wi-Fi 即可直连)
 2. 放行端口:`sudo ufw allow 8787/tcp`
 3. **先用手机浏览器**打开 `http://<服务器IP>:8787/im/health`
    - 能看到 JSON → 网络通了,继续

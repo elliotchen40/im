@@ -5,15 +5,35 @@
 
 ---
 
-## 当前部署状态
+## 机器拓扑（现行）
 
-**❌ 尚未部署到任何机器**（2026-09-12）。
+| 机器 | 地址 | 角色 | 服务端代码路径 |
+|---|---|---|---|
+| MacBook（本机） | — | **只做鸿蒙客户端**：DevEco 编译 / 签名 / 装机 | ❌ 不跑服务端 |
+| 开发机 | `10.168.3.180`（容器 `fanny`） | 服务端**开发 / 联调**（日常开发在这里） | 容器内 `/.openclaw/team-shared/projects/im` |
+| 生产机（**112**） | `10.168.3.112` | 服务端**生产**：systemd 常驻 + cloudflared 隧道 | `/opt/im/server` |
+
+分工是有意的：服务端**不在 MacBook 上跑**（合盖休眠手机就连不上），
+MacBook 只负责出 HAP；开发机在容器里迭代，生产机只跑稳定版本。
+
+## 代码怎么过去（只记路径与同步方式，代码本身不入文档）
+
+| 方向 | 方式 |
+|---|---|
+| 唯一的代码事实源 | GitHub `origin` = `git@github.com:elliotchen40/im.git` |
+| MacBook ⇄ 开发机 | 各自 `git pull` / `git push`；开发机在容器 `fanny` 内的 `/.openclaw/team-shared/projects/im` 操作 |
+| 开发机 → 生产机 112 | `rsync -a --exclude data/ server/ <user>@10.168.3.112:/opt/im/server/`，或直接在 112 上 `git clone` |
+| 首次落生产机 | `sudo mkdir -p /opt/im && sudo cp -r server /opt/im/ && cd /opt/im/server && npm install && npm run build` |
+
+> **绝不跨越 `data/`**：`server/data/` 属于运行它的那台机器（112 有自己的 `im_bot.db` + `soul/wx_bot_*.db`）。
+
+## 当前部署状态
 
 | 项 | 状态 |
 |---|---|
-| 目标机器 | 未选定（建议常开的小主机/树莓派，或 112） |
-| systemd 服务 | 单元已备，**未安装** |
-| cloudflared 隧道 | **未创建**（im 需要隧道，见下） |
+| 开发机 `10.168.3.180`（容器 `fanny`） | ✅ 服务端开发环境在此运行 |
+| 生产机 112（`10.168.3.112`） | ⬜ 待部署：`/opt/im/server` 尚未建、systemd 未装 |
+| cloudflared 隧道 | **未创建** —— 隧道要装在生产机 **112** 上（见下） |
 | 域名 | 未绑定 |
 | 首次配对 | 未执行 |
 
@@ -46,6 +66,7 @@
 | 项 | 值 |
 |---|---|
 | **端口** | `8787`（`IM_HTTP_PORT`） |
+| **机器** | 开发机 `10.168.3.180`（容器 `fanny`）· 生产机 **112** = `10.168.3.112` · MacBook 只编译 app |
 | **cloudflared** | ✅ **需要** —— 手机在外网要连服务端；im 是 HTTP API（不是 iLink 主动连出，与 hitch/wx-robot 不同） |
 | 运行形态 | `npm run build` → `node --env-file=.env dist/index.js`（生产不必带 tsx） |
 | 必填环境变量 | `IM_APP_TOKEN`（`openssl rand -hex 32`）、`MODEL_<NAME>_API_KEY`、`SILICONFLOW_API_KEY` |
@@ -72,7 +93,8 @@
 
 ## 部署待办
 
-- [ ] 选机器并同步代码（`scp -r server/` 或用 git）
+- [x] 选机器：开发机 `10.168.3.180`（容器 `fanny`）已在跑；生产机 **112** = `10.168.3.112`
+- [ ] 把 `server/` 同步到 112 的 `/opt/im/server`（`rsync` 或 git，**不带 `data/`**）
 - [ ] `npm install && npm run build`，装 `im-server.service`
 - [ ] `cloudflared tunnel create` + `route dns` + 装 service
 - [ ] `.env` 设 `IM_PUBLIC_URL`，重启，四层验证（本机 curl → 隧道 curl → 手机浏览器 → app）
