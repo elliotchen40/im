@@ -136,7 +136,8 @@ struct Index {
 
   private onServerMessage(m: SyncMsg): void {
     this.settleOldestPending();
-    this.messages.push(new ChatMessage(m.serverMsgId, m.text, false, m.kind, m.ts));
+    // kind === 'user' = 自己发的（历史里也会有）；其余（reply/proactive）是机器人
+    this.messages.push(new ChatMessage(m.serverMsgId, m.text, m.kind === 'user', m.kind, m.ts));
     this.recvState = '已收到回复';
     // 记录当前最老 id（用于下拉分页）—— 只在首次有消息时初始化
     if (this.oldestId === 0) {
@@ -174,7 +175,8 @@ struct Index {
       }
       const head: ChatMessage[] = [];
       for (const m of fresh) {
-        head.push(new ChatMessage(m.serverMsgId, m.text, false, m.kind, m.ts));
+        // kind === 'user' = 自己发的
+        head.push(new ChatMessage(m.serverMsgId, m.text, m.kind === 'user', m.kind, m.ts));
       }
       this.messages = head.concat(this.messages);
       this.oldestId = fresh[0].seq; // 更新到更早
