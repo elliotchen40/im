@@ -67,7 +67,7 @@ MacBook 只负责出 HAP；开发机在容器里迭代，生产机只跑稳定�
 |---|---|
 | **端口** | `8787`（`IM_HTTP_PORT`） |
 | **机器** | 开发机 `10.168.3.180`（容器 `fanny`）· 生产机 **112** = `10.168.3.112` · MacBook 只编译 app |
-| **cloudflared** | ✅ **需要** —— 手机在外网要连服务端；im 是 HTTP API（不是 iLink 主动连出，与 hitch/wx-robot 不同） |
+| **cloudflared** | ✅ **需要**，隧道装/指向**生产机 112**（`10.168.3.112`）—— 手机在外网要连服务端；im 是 HTTP API（不是 iLink 主动连出，与 hitch/wx-robot 不同） |
 | 运行形态 | `npm run build` → `node --env-file=.env dist/index.js`（生产不必带 tsx） |
 | 必填环境变量 | `IM_APP_TOKEN`（`openssl rand -hex 32`）、`MODEL_<NAME>_API_KEY`、`SILICONFLOW_API_KEY` |
 | **隧道场景必改两项** | `IM_BIND_HOST=127.0.0.1` + `IM_PUBLIC_URL=https://你的域名`（后者会被写进配对二维码，**漏改会导致手机出门连不上**） |
