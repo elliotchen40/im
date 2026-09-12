@@ -49,9 +49,18 @@ interface SyncReq {
   cursor: string;
 }
 
+/** /im/send 请求里的图片（协议 §3.2：images 可选，≤8MiB） */
+export interface SendImage {
+  /** mime 类型，如 image/jpeg */
+  mime: string;
+  /** base64 编码的图片字节 */
+  dataBase64: string;
+}
+
 interface SendReq {
   clientMsgId: string;
   text: string;
+  images?: SendImage[];
 }
 
 interface HistoryReq {
@@ -91,9 +100,9 @@ export class ImClient {
     return JSON.parse(raw) as SyncResp;
   }
 
-  /** 发消息（clientMsgId 为幂等键，重发安全） */
-  async send(text: string, clientMsgId: string): Promise<SendResp> {
-    const body: SendReq = { clientMsgId: clientMsgId, text: text };
+  /** 发消息（clientMsgId 为幂等键，重发安全）；images 可选（协议 §3.2） */
+  async send(text: string, clientMsgId: string, images?: SendImage[]): Promise<SendResp> {
+    const body: SendReq = { clientMsgId: clientMsgId, text: text, images: images };
     const raw: string = await this.post('/im/send', JSON.stringify(body), 15000);
     return JSON.parse(raw) as SendResp;
   }

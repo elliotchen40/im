@@ -1,27 +1,35 @@
 /**
- * PhotoService —— 拉起相册选择器，返回图片的 file:// uri。
+ * PhotoService —— 拉起相册选择器，返回图片的 file:// uri；读字节 → base64。
  *
- * 设计抉择（不再做磁盘拷贝）：
- *   - HarmonyOS NEXT 上 picker 返回的 `file://media/Photo/...` uri 在 app 同进程内可读，
- *     Image 控件直接传 uri 即可渲染，授权由系统处理，**不需要**预申请任何图片权限。
- *   - 之前尝试把 uri 拷贝到 `context.cacheDir`（fileIo.copyFileSync / fs.openSync +
- *     readSync/writeSync 等）连续遇到 4 类编译错（uri 不可解析、File 类型与 readSync
- *     期望的 number fd 不匹配、writeSync 期望 WriteOptions、closeSync 不存在），
- *     实际 ArkTS 签名与我每次的猜测都不一致 —— 直接放弃 fs 拷贝这条路。
- *   - 现在策略：PhotoService 只把 picker 给的 uri 字符串原样存到 preferences（AppConfig
- *     已支持 string 字段）。Glimmer 当前会话内头像/背景能正常显示；下次冷启动如果
- *     uri 已失效（罕见），用户重新选图就行 —— PhotoViewPicker 的沙箱保证大多数情况
- *     下重启仍可读。
- *   - tryDelete 保留 noop 语义（之前的 cache 路径不再用，但调用方仍可能传入旧 cache
- *     路径；不再 unlink 任何东西，避免误删）。
+ * 职责：
+ *   - pick()：拉起系统相册，返回 uri（头像 / 背景 / 附件通用）。
+ *   - readBase64()：把 picker 给的 uri 读成 base64 字节，用于 /im/send 的 images
+ *     （协议 §3.2：images[].dataBase64，≤8MiB）。
+ *
+ * 读 uri 的官方路径（photoAccessHelper.getReadOnlyFd 已废弃，@useinstead
+ * @ohos.file.fs:fileIo.open）：
+ *   fs.openSync(uri, READ_ONLY) → File（.fd 是 number）→ fs.readSync(fd, buf) 循环
+ *   → fs.closeSync(fd) → util.Base64Helper.encodeToStringSync(Uint8Array)。
  */
 
 import { common } from '@kit.AbilityKit';
 import { photoAccessHelper } from '@kit.MediaLibraryKit';
+import { fileIo as fs } from '@kit.CoreFileKit';
+import { util } from '@kit.ArkTS';
 
 export interface PickedPhoto {
   /** picker 返回的图片 uri（file://media/Photo/...），可直接传给 Image；空串表示取消 */
   uri: string;
+  /** 出错信息（成功时为空） */
+  error: string;
+}
+
+/** 读出的图片字节 + mime */
+export interface PickedImageData {
+  /** base64 编码的图片字节（可直接放进 /im/send 的 images[].dataBase64） */
+  dataBase64: string;
+  /** mime 类型，如 image/jpeg */
+  mime: string;
   /** 出错信息（成功时为空） */
   error: string;
 }
@@ -46,6 +54,60 @@ export class PhotoService {
       return { uri: uris[0], error: '' };
     } catch (e) {
       return { uri: '', error: (e as Error).message };
+    }
+  }
+
+  /**
+   * 把 picker 给的 uri 读成 base64 字节（用于 /im/send 的 images）。
+   *
+   * 官方推荐（@ohos.file.photoAccessHelper 里 getReadOnlyFd 已废弃，@useinstead
+   * @ohos.file.fs:fileIo.open）：
+   *   1. fs.openSync(uri, READ_ONLY) → File 对象（File.fd 是 number fd）
+   *   2. fs.readSync(fd, buf) 循环读到 EOF（返回 <=0 结束）
+   *   3. fs.closeSync(fd)
+   * 然后用 util.Base64Helper.encodeToStringSync 把 Uint8Array 编码成 base64。
+   */
+  static async readBase64(uri: string): Promise<PickedImageData> {
+    const empty: PickedImageData = { dataBase64: '', mime: 'image/jpeg', error: '' };
+    if (uri.length === 0) {
+      return { ...empty, error: 'uri 为空' };
+    }
+    try {
+      const file = fs.openSync(uri, fs.OpenMode.READ_ONLY);
+      const fd: number = file.fd;
+      const chunks: ArrayBuffer[] = [];
+      const buf = new ArrayBuffer(64 * 1024);
+      let total = 0;
+      try {
+        while (true) {
+          const n: number = fs.readSync(fd, buf);
+          if (n <= 0) {
+            break;
+          }
+          // 只取前 n 字节（buf 是复用 buffer）
+          const piece = buf.slice(0, n);
+          chunks.push(piece);
+          total += n;
+        }
+      } finally {
+        fs.closeSync(fd);
+      }
+      // 合并成一个大 ArrayBuffer
+      const merged = new ArrayBuffer(total);
+      const mergedView = new Uint8Array(merged);
+      let off = 0;
+      for (let i = 0; i < chunks.length; i++) {
+        const pieceView = new Uint8Array(chunks[i]);
+        mergedView.set(pieceView, off);
+        off += pieceView.length;
+      }
+      // base64 编码
+      const b64: string = util.Base64Helper.encodeToStringSync(mergedView);
+      console.info('[PhotoService] readBase64 OK, size=' + total + 'B, b64len=' + b64.length);
+      return { dataBase64: b64, mime: 'image/jpeg', error: '' };
+    } catch (e) {
+      console.warn('[PhotoService] readBase64 失败：' + (e as Error).message);
+      return { ...empty, error: (e as Error).message };
     }
   }
 

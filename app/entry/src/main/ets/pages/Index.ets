@@ -13,7 +13,7 @@ import { common } from '@kit.AbilityKit';
 import { window } from '@kit.ArkUI';
 import { AppConfig } from '../services/AppConfig';
 import { PhotoService } from '../services/PhotoService';
-import { ImClient, SendResp, SyncMsg, SyncResp, HistoryResp, newClientMsgId } from '../services/ImClient';
+import { ImClient, SendResp, SendImage, SyncMsg, SyncResp, HistoryResp, newClientMsgId } from '../services/ImClient';
 import { PairPayload, PairResult, pairWithServer, parsePairPayload, scanOnce } from '../services/Pairing';
 import { ChatMessage, MessageKind } from '../model/Message';
 
@@ -46,6 +46,11 @@ struct Index {
 
   // + 号附件面板
   @State attachSheetOpen: boolean = false;
+
+  // 已选待发送的图片（base64），onSend 时随消息发出
+  private pendingImages: SendImage[] = [];
+  // 附件占位文本（显示在输入框，如 [图片:xxx]）
+  @State pendingImageLabel: string = '';
 
   // 历史加载状态
   @State loadingHistory: boolean = false;
@@ -260,7 +265,8 @@ struct Index {
 
   private async onSend(): Promise<void> {
     const text: string = this.inputText.trim();
-    if (text.length === 0) {
+    const images: SendImage[] = this.pendingImages;
+    if (text.length === 0 && images.length === 0) {
       return;
     }
     const client: ImClient | null = this.client;
@@ -270,11 +276,17 @@ struct Index {
     }
     const id: string = newClientMsgId();
     this.inputText = '';
-    this.messages.push(new ChatMessage(id, text, true, MessageKind.REPLY, Date.now(), true));
+    this.pendingImages = [];
+    this.pendingImageLabel = '';
+    // 本地显示：有图时展示 [图片] 占位，有文本时展示文本（气泡内容取两者拼接）
+    const displayText: string = text.length > 0
+      ? (images.length > 0 ? '[图片] ' + text : text)
+      : '[图片]';
+    this.messages.push(new ChatMessage(id, displayText, true, MessageKind.REPLY, Date.now(), true));
     this.scrollToBottom();
     this.sendState = '发送中…';
     try {
-      const resp: SendResp = await client.send(text, id);
+      const resp: SendResp = await client.send(text, id, images);
       if (resp.ret === 0) {
         // send 回 200 即认为已送达服务端（不是等机器人回复）
         this.markSent(id);
@@ -402,9 +414,15 @@ struct Index {
       }
       return;
     }
-    // 本地只把文件名写到输入框（完整图片发送需要服务端配合 base64
-    // 入站；本次只占位提示，未来版本对接）
+    // 读字节 → base64（协议 §3.2：images[].dataBase64）
+    this.toast('读取图片中…');
+    const img = await PhotoService.readBase64(r.uri);
+    if (img.error.length > 0 || img.dataBase64.length === 0) {
+      this.toast('读图失败：' + img.error);
+      return;
+    }
     const fname: string = (r.uri.split('/').pop() ?? r.uri.slice(-12));
+    this.pendingImages = this.pendingImages.concat([{ mime: img.mime, dataBase64: img.dataBase64 }]);
     this.inputText = this.inputText + ' [图片:' + fname + ']';
     this.toast('图片已附加：' + fname);
   }
