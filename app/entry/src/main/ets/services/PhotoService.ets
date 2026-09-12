@@ -68,9 +68,8 @@ export class PhotoService {
    * 然后用 util.Base64Helper.encodeToStringSync 把 Uint8Array 编码成 base64。
    */
   static async readBase64(uri: string): Promise<PickedImageData> {
-    const empty: PickedImageData = { dataBase64: '', mime: 'image/jpeg', error: '' };
     if (uri.length === 0) {
-      return { ...empty, error: 'uri 为空' };
+      return { dataBase64: '', mime: 'image/jpeg', error: 'uri 为空' };
     }
     try {
       const file = fs.openSync(uri, fs.OpenMode.READ_ONLY);
@@ -101,13 +100,14 @@ export class PhotoService {
         mergedView.set(pieceView, off);
         off += pieceView.length;
       }
-      // base64 编码
-      const b64: string = util.Base64Helper.encodeToStringSync(mergedView);
+      // base64 编码（Base64Helper 是类，需 new 实例；encodeToStringSync 是实例方法）
+      const b64Helper = new util.Base64Helper();
+      const b64: string = b64Helper.encodeToStringSync(mergedView);
       console.info('[PhotoService] readBase64 OK, size=' + total + 'B, b64len=' + b64.length);
       return { dataBase64: b64, mime: 'image/jpeg', error: '' };
     } catch (e) {
       console.warn('[PhotoService] readBase64 失败：' + (e as Error).message);
-      return { ...empty, error: (e as Error).message };
+      return { dataBase64: '', mime: 'image/jpeg', error: (e as Error).message };
     }
   }
 
