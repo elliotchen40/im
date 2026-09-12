@@ -147,10 +147,10 @@ npm run dev:verify
 
 # 终端 3：跑三项接口
 T=verify-token-0123456789abcdef
-curl -fsS http://127.0.0.1:8787/im/health
-curl -fsS -X POST http://127.0.0.1:8787/im/send -H "Authorization: Bearer $T" \
+curl -fsS http://127.0.0.1:8081/im/health
+curl -fsS -X POST http://127.0.0.1:8081/im/send -H "Authorization: Bearer $T" \
   -H 'Content-Type: application/json' -d '{"text":"你好"}'
-curl -fsS -X POST http://127.0.0.1:8787/im/sync -H "Authorization: Bearer $T" \
+curl -fsS -X POST http://127.0.0.1:8081/im/sync -H "Authorization: Bearer $T" \
   -H 'Content-Type: application/json' -d '{"cursor":""}'
 ```
 

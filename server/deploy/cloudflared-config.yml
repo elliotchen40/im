@@ -24,7 +24,7 @@
 #
 # 服务端侧配合（server/.env）：
 #   IM_BIND_HOST=127.0.0.1     # 只监听本机，公网入口交给隧道
-#   IM_HTTP_PORT=8787
+#   IM_HTTP_PORT=8081
 # ============================================================
 
 tunnel: REPLACE_WITH_TUNNEL_ID
@@ -37,7 +37,7 @@ metrics: 127.0.0.1:20241
 ingress:
   # 主入口：app 用这个域名
   - hostname: im.example.com
-    service: http://127.0.0.1:8787
+    service: http://127.0.0.1:8081
     originRequest:
       # 长轮询最长挂 35s（IM_LONG_POLL_TIMEOUT_MS），给足连接余量
       connectTimeout: 30s
@@ -59,4 +59,4 @@ ingress:
 #    个人自用靠 token 即可（隧道已隐藏源站）。
 # 2) 免费版对"源站静默"有约 100s 的硬超时（返回 524）。
 #    我们的长轮询是 35s，安全；但不要把 IM_LONG_POLL_TIMEOUT_MS 调到 ≥100s。
-# 3) 传输链路：手机 --https--> Cloudflare 边缘 --隧道--> cloudflared --http--> 127.0.0.1:8787
+# 3) 传输链路：手机 --https--> Cloudflare 边缘 --隧道--> cloudflared --http--> 127.0.0.1:8081

@@ -255,7 +255,7 @@ CLI 参数：`--logout`（im 已改为提示）、`--soul <NAME>`、`--env-file[
 
 **关怀**：`CARE_TICK_INTERVAL_MS`(14400000)。
 
-**im 新增**：`IM_APP_TOKEN`（必填）、`IM_HTTP_PORT`(8787)、`IM_BIND_HOST`(0.0.0.0)、
+**im 新增**：`IM_APP_TOKEN`（必填）、`IM_HTTP_PORT`(8081)、`IM_BIND_HOST`(0.0.0.0)、
 `IM_LONG_POLL_TIMEOUT_MS`(35000)、`IM_OWNER_USER_ID`(owner)、`IM_DATA_DIR`。
 
 ---

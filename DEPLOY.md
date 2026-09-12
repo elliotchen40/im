@@ -16,9 +16,9 @@
 分工是有意的：服务端**不在 MacBook 上跑**（合盖休眠手机就连不上），MacBook 只负责出 HAP；
 开发机在容器 `fanny` 里迭代、**只在局域网内联调（不用隧道）**；生产机 112 才跑隧道 + 稳定版本。
 
-> 开发机的联调姿势：服务端跑在容器里 → 需把 8787 映射到宿主 180、容器内 `IM_BIND_HOST=0.0.0.0`，
-> 并显式设 `IM_PUBLIC_URL=http://10.168.3.180:8787`（否则配对二维码里是容器 IP，手机连不上）。
-> 手机装 app 后直连 `http://10.168.3.180:8787/im/health` 验通，再用「手动填写」或扫码配对。
+> 开发机的联调姿势：服务端跑在容器里 → 容器内监听 8081、需把**容器的 8081 映射到宿主的 18796**、容器内 `IM_BIND_HOST=0.0.0.0`，
+> 并显式设 `IM_PUBLIC_URL=http://10.168.3.180:18796`（否则配对二维码里是容器 IP，手机连不上）。
+> 手机装 app 后直连 `http://10.168.3.180:18796/im/health` 验通，再用「手动填写」或扫码配对。
 
 ## 代码怎么过去（只记路径与同步方式，代码本身不入文档）
 
@@ -40,7 +40,7 @@
 | **生产机** | `10.168.3.112`（ARM64 / Armbian 25.11.2 jammy，node v22.22.1） |
 | **代码路径** | `/opt/im/server` |
 | **systemd** | `im-server.service` ✅ **active (running)** · **enabled**（开机自启） |
-| **监听** | **`127.0.0.1:8787`**（仅本机 —— 对外靠 cloudflared 隧道） |
+| **监听** | **`127.0.0.1:8081`**（仅本机 —— 对外靠 cloudflared 隧道） |
 | **数据目录** | `/opt/im/server/data/` |
 | **日志** | `/var/log/im-server.log` |
 | **配置** | `/opt/im/server/.env`（权限 600；模型 / embedding key 复用同机 `/opt/wx-robot/.env`） |
@@ -56,11 +56,11 @@
 | ourworld | 8000 | `ourworld.service`（active） | ✅ 用**现有** cloudflared（`aplacecalledus.top`） |
 | hitch | — | `hitch.service`（active） | ❌ 不需要（iLink 主动连出） |
 | wx-robot | — | `wx-robot.service`（**当前 inactive**） | ❌ 不需要 |
-| **im** | **8787** | **`im-server.service`**（active） | ✅ **需要**（HTTP API） |
+| **im** | **8081** | **`im-server.service`**（active） | ✅ **需要**（HTTP API） |
 
 - 现有 cloudflared 是**单隧道多 hostname** 模式：隧道 `ourworld`(`9b522f12-…`)，配置在
   **`/root/.cloudflared/config.yml`**（注意：**不是** `/etc/cloudflared/`）
-- 端口 8787 与三者都不冲突；改 cloudflared 时**只新增 im 的 ingress，别动已有那 5 条**
+- 端口 8081 与三者都不冲突；改 cloudflared 时**只新增 im 的 ingress，别动已有那 5 条**
 
 ### 部署命令（复现用）
 
@@ -89,7 +89,7 @@ cloudflared tunnel route dns ourworld im.example.com
 
 # 2) 编辑 /root/.cloudflared/config.yml，在最后的 http_status:404 之前插入：
 #      - hostname: im.example.com
-#        service: http://localhost:8787
+#        service: http://localhost:8081
 
 # 3) 重启（会有几秒影响到 ourworld 的隧道）
 systemctl restart cloudflared
@@ -116,7 +116,7 @@ echo "IM_PUBLIC_URL=https://你的域名" >> /opt/im/server/.env
 systemctl restart im-server
 
 # 2) 四层验证
-curl http://127.0.0.1:8787/im/health          # 在 112 上
+curl http://127.0.0.1:8081/im/health          # 在 112 上
 curl https://你的域名/im/health               # 在 112 上
 #   再用手机浏览器打开同一个 https 地址
 #   最后 app 扫码
@@ -148,7 +148,7 @@ cd /opt/im/server && npm run pair
 
 | 项 | 值 |
 |---|---|
-| **端口** | `8787`（`IM_HTTP_PORT`）；112 上仅听 `127.0.0.1` |
+| **端口** | `8081`（`IM_HTTP_PORT`）；112 上仅听 `127.0.0.1` |
 | **机器** | 开发机 `10.168.3.180`（容器 `fanny`）· 生产机 **112** = `10.168.3.112` · MacBook 只编译 app |
 | **cloudflared** | ✅ **需要，但只给生产机 112** —— 开发机 180 一律局域网直连、**不建隧道**。方向与 iLink 相反（手机主动连服务端），**必须有 TLS** |
 | 运行形态 | `npm run build` → `node --env-file=.env dist/index.js`（生产不必带 tsx） |
@@ -158,7 +158,7 @@ cd /opt/im/server && npm run pair
 | 备份 | `tar czf im-backup-$(date +%F).tgz -C /opt/im/server data/` |
 | 接管上游数据 | `IM_BOT_DB_PATH` 指向 wx-robot 的 `wx_bot.db`（schema 完全一致，per-SOUL DB 同名） |
 | 配对（无需手填 token） | 服务器跑 `npm run pair` 出二维码 → app「扫码登录」 |
-| 健康检查 | `curl http://127.0.0.1:8787/im/health` |
+| 健康检查 | `curl http://127.0.0.1:8081/im/health` |
 | 常用运维 | `systemctl status im-server` · `tail -f /var/log/im-server.log` · `systemctl restart im-server` |
 
 ---

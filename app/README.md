@@ -62,7 +62,7 @@ cp .env.example .env
 
 ```env
 IM_APP_TOKEN=<用 openssl rand -hex 32 生成>
-IM_HTTP_PORT=8787
+IM_HTTP_PORT=8081
 IM_BIND_HOST=0.0.0.0          # 允许外部（含手机）访问；只给本机用就填 127.0.0.1
 MODEL_DSF_API_KEY=sk-xxx      # 模型 key（任意 OpenAI 兼容 provider）
 SILICONFLOW_API_KEY=sk-xxx    # 记忆检索用的 embedding key
@@ -76,7 +76,7 @@ npm run dev
 本机自测：
 
 ```bash
-curl -fsS http://127.0.0.1:8787/im/health
+curl -fsS http://127.0.0.1:8081/im/health
 # {"ret":0,"channel":"im","outboxSeq":0,"inboundAck":0,"pendingInbound":0}
 ```
 
@@ -85,11 +85,11 @@ curl -fsS http://127.0.0.1:8787/im/health
 服务端在局域网机器上（`IM_BIND_HOST=0.0.0.0`），手机与它同一 Wi-Fi：
 
 1. 查服务端局域网 IP：`ip addr | grep 'inet '`（形如 `192.168.1.10`）
-2. 确认防火墙放行：`sudo ufw allow 8787/tcp`
-   （或临时：`sudo iptables -I INPUT -p tcp --dport 8787 -j ACCEPT`）
-3. 先用手机浏览器验证一次：访问 `http://192.168.1.10:8787/im/health`，能看到 JSON 就通了
+2. 确认防火墙放行：`sudo ufw allow 8081/tcp`
+   （或临时：`sudo iptables -I INPUT -p tcp --dport 8081 -j ACCEPT`）
+3. 先用手机浏览器验证一次：访问 `http://192.168.1.10:8081/im/health`，能看到 JSON 就通了
 4. app 配置面板填：
-   - 地址：`http://192.168.1.10:8787`
+   - 地址：`http://192.168.1.10:8081`
    - token：与服务端 `IM_APP_TOKEN` 一致
 
 > **明文 HTTP 的坑**：鸿蒙默认拦截明文流量。本工程已加
@@ -100,14 +100,14 @@ curl -fsS http://127.0.0.1:8787/im/health
 
 ### 第 3 步：场景 B —— 公网生产（推荐，也是唯一安全的做法）
 
-**不要把 8787 裸暴露到公网** —— `Authorization: Bearer <token>` 在明文 HTTP 下可被中途截获，
+**不要把 8081 裸暴露到公网** —— `Authorization: Bearer <token>` 在明文 HTTP 下可被中途截获，
 拿到 token 的人就能读写你的全部对话与记忆。
 
 用反向代理加 TLS（以 Caddy 为例，自动申请并续期证书）：
 
 ```caddyfile
 im.example.com {
-    reverse_proxy 127.0.0.1:8787
+    reverse_proxy 127.0.0.1:8081
 }
 ```
 

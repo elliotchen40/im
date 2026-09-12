@@ -149,7 +149,7 @@ async function main(): Promise<void> {
   const channel = new HttpChannel({
     token: process.env.IM_APP_TOKEN ?? "",
     dataDir: channelDataDir,
-    port: Number(process.env.IM_HTTP_PORT ?? 8787),
+    port: Number(process.env.IM_HTTP_PORT ?? 8081), // 与 DEFAULT_HTTP_PORT 保持一致
     host: process.env.IM_BIND_HOST ?? "0.0.0.0",
     longPollTimeoutMs: Number(process.env.IM_LONG_POLL_TIMEOUT_MS ?? 35_000),
     defaultUserId: process.env.IM_OWNER_USER_ID ?? "owner",

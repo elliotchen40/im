@@ -3,7 +3,7 @@
 > 目的：让手机在外面（4G/5G）也能连到你家/机房里那台没有公网 IP 的服务器。
 >
 > 本项目的用法很确定：**只给生产机 112（`10.168.3.112`）建隧道**；开发机 180（`10.168.3.180`）
-> 永远在局域网内联调（手机连同一 Wi-Fi 直连 `http://10.168.3.180:8787`），**不建隧道**。
+> 永远在局域网内联调（手机连同一 Wi-Fi 直连 `http://10.168.3.180:18796`），**不建隧道**。
 >
 > 本文覆盖：域名托管 → 建隧道 → 凭证分发 → **开发机 / 生产机双环境** → 常驻与验证 → 排错。
 
@@ -24,7 +24,7 @@
 
 | 做法 | 隧道数 | 适用 |
 |---|---|---|
-| **A. 只给生产机建隧道**（推荐先这样） | 1 条 | 开发机（`10.168.3.180`）就在同一局域网里联调，用 `http://10.168.3.180:8787` 直连，根本不需要隧道 |
+| **A. 只给生产机建隧道**（推荐先这样） | 1 条 | 开发机（`10.168.3.180`）就在同一局域网里联调，用 `http://10.168.3.180:18796` 直连，根本不需要隧道 |
 | **B. 开发 + 生产各一条，用不同子域名** | 2 条 | `im-dev.example.com` → 开发机；`im.example.com` → 生产机 |
 | C. 多台机器跑**同一个隧道** | 1 条 | ⚠️ 这是**高可用**语义：Cloudflare 会把请求轮流打到各台机器。**不能**用来区分开发/生产 |
 
@@ -125,7 +125,7 @@ credentials-file: /etc/cloudflared/<生产隧道UUID>.json
 
 ingress:
   - hostname: im.example.com
-    service: http://127.0.0.1:8787
+    service: http://127.0.0.1:8081
   - service: http_status:404
 ```
 
@@ -170,7 +170,7 @@ IM_PUBLIC_URL=https://im.example.com   # ← 必须改成隧道域名（写进�
 
 | # | 命令 | 通过意味着 |
 |---|---|---|
-| 1 | `curl http://127.0.0.1:8787/im/health`（在服务器上） | 服务端活着 |
+| 1 | `curl http://127.0.0.1:8081/im/health`（在服务器上） | 服务端活着 |
 | 2 | `curl https://im.example.com/im/health`（在服务器上） | 隧道 + DNS + 边缘都通 |
 | 3 | 手机浏览器打开 `https://im.example.com/im/health` | 手机能到（外网链路 OK） |
 | 4 | app 点「扫码登录」扫 `npm run pair` 的二维码 | 端到端完成 |
@@ -199,7 +199,7 @@ IM_PUBLIC_URL=https://im.example.com   # ← 必须改成隧道域名（写进�
 ## 8. 临时方案:还没有域名
 
 ```bash
-cloudflared tunnel --url http://127.0.0.1:8787
+cloudflared tunnel --url http://127.0.0.1:8081
 # 输出形如 https://random-words-1234.trycloudflare.com
 ```
 
@@ -251,7 +251,7 @@ ingress:
   - hostname: 现有项目.example.com          # ← 原有，别动
     service: http://localhost:8000
   - hostname: <你的项目域名>                # ← 新增的这两行
-    service: http://localhost:8787
+    service: http://localhost:8081
   - service: http_status:404                # ← 兜底必须留在最后
 ```
 
@@ -269,7 +269,7 @@ tunnel: <新隧道UUID>
 credentials-file: /root/.cloudflared/<新隧道UUID>.json
 ingress:
   - hostname: <你的项目域名>
-    service: http://localhost:8787
+    service: http://localhost:8081
   - service: http_status:404
 YAML
 
