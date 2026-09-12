@@ -217,3 +217,28 @@ AppScope/                           ★应用级配置（缺了 DevEco 打不开
 - 状态用 `@State`；数组内元素变更后需 `splice` 回写才能触发刷新（见 `settleOldestPending`）。
 - 网络一律 `@kit.NetworkKit` 的 `http.createHttp()`，用完 `destroy()`。
 - 持久化一律 `@kit.ArkData` 的 `preferences`。
+
+---
+
+## 七、ArkTS 编译 / 权限坑（实测，2026-09）
+
+**坑 1 —— 图片/相册权限（`PhotoViewPicker` 不需要声明）**
+
+- 给 `module.json5` 的 `requestPermissions` 加 `ohos.permission.READ_MEDIA_IMAGES`
+  会在 PreBuild 报 `00303221 Configuration Error`：HarmonyOS NEXT API 12 的 SDK **没有**
+  把它当内置权限（内置是 `ohos.permission.READ_MEDIA`，API 13+）。
+- **正确做法**：用 `photoAccessHelper.PhotoViewPicker`（`@kit.MediaLibraryKit`）走系统相册
+  选择器，授权由系统处理，**app 不需要声明任何图片读取权限**。选了之后用
+  `fileIo.copyFileSync(uri, context.cacheDir + '/xxx')` 拷到自己的沙箱目录即可跨重启使用。
+- 同理：ScanKit 默认扫码 UI 也不需要 `ohos.permission.CAMERA`。
+
+**坑 2 —— 拿状态栏高度做顶栏避让**
+
+- `this.getUIContext().getWindow()` **不存在**（`UIContext` 只有 `getWindowId()`）。
+- 正确入口：`window.getLastWindow(ctx)`，但它返回 **`Promise<Window>`**，必须 `await`；
+  之后 `win.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM).topRect.height` 拿顶部
+  状态栏/挖孔高度（px 单位），用全局 `px2vp(px)` 转成 vp 再当 `Row().height()` 用。
+- 不要用 `$r('sys.float.density')` —— 那不是合法资源名，编译器报 `Unknown resource name`。
+- ArkTS 还要求：`const win` / `const avoid` / `let vp` 都要显式标类型（`window.Window` /
+  `window.AvoidArea` / `number`），否则报 `arkts-no-any-unknown`。
+
