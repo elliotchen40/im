@@ -2,15 +2,15 @@
   "string": [
     {
       "name": "module_desc",
-      "value": "im 主模块"
+      "value": "Glimmer 主模块（聊天界面 + 协议客户端）"
     },
     {
       "name": "EntryAbility_desc",
-      "value": "im 聊天客户端"
+      "value": "Glimmer 聊天客户端"
     },
     {
       "name": "EntryAbility_label",
-      "value": "im"
+      "value": "Glimmer"
     },
     {
       "name": "reason_internet",
@@ -22,7 +22,7 @@
     },
     {
       "name": "app_title",
-      "value": "im"
+      "value": "Glimmer"
     },
     {
       "name": "input_placeholder",
