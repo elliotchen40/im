@@ -92,16 +92,16 @@ npm run dev
 
 ```bash
 # 探活
-curl localhost:8787/im/health
+curl localhost:8081/im/health
 
 # 假装是 app 发一条消息
-curl -X POST localhost:8787/im/send \
+curl -X POST localhost:8081/im/send \
   -H "Authorization: Bearer $IM_APP_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"text":"你好"}'
 
 # 长轮询收回复
-curl -X POST localhost:8787/im/sync \
+curl -X POST localhost:8081/im/sync \
   -H "Authorization: Bearer $IM_APP_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"cursor":""}'
@@ -133,7 +133,7 @@ npm run dev:verify  # 终端 2：用 .env.verify 起 daemon
 **[docs/deploy/next-steps.md](docs/deploy/next-steps.md)** 与
 **[app/README.md §二 连到自己的服务器](app/README.md)**。
 
-> ⚠️ **不要**把 8787 裸暴露到公网：`Authorization: Bearer <token>` 在明文 HTTP 下可被截获，
+> ⚠️ **不要**把 8081 裸暴露到公网：`Authorization: Bearer <token>` 在明文 HTTP 下可被截获，
 > 拿到 token 就等于拿到你的全部对话与记忆。生产请走 TLS 反向代理。
 
 ---

@@ -42,7 +42,7 @@ TOKEN="$(grep -E '^IM_APP_TOKEN=' .env | head -1 | cut -d= -f2- | tr -d '"'"'"' 
 [ -n "$TOKEN" ] || fail ".env 里的 IM_APP_TOKEN 为空 —— 服务端会拒绝启动（这是有意的安全设计）"
 
 PORT="$(grep -E '^IM_HTTP_PORT=' .env | head -1 | cut -d= -f2- | tr -d ' ' || true)"
-PORT="${PORT:-8787}"
+PORT="${PORT:-8081}"    # 与 .env / http_channel 的默认端口一致
 BASE="http://127.0.0.1:${PORT}"
 
 echo "启动 daemon（后台，日志 /tmp/im_verify.log）..."

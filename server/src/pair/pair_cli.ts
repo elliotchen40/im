@@ -95,7 +95,7 @@ async function main(): Promise<void> {
   const dbPath = env.IM_BOT_DB_PATH ?? env.WX_BOT_DB_PATH ?? "./data/im_bot.db";
   const dataDir = env.IM_DATA_DIR ?? path.join(path.dirname(dbPath) || ".", "im");
   const file = pairingFilePath(dataDir);
-  const port = env.IM_HTTP_PORT ?? "8787";
+  const port = env.IM_HTTP_PORT ?? "8081"; // 与 http_channel 的 DEFAULT_HTTP_PORT 一致
 
   const token = (env.IM_APP_TOKEN ?? "").trim();
   if (!token) {

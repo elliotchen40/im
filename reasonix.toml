@@ -21,7 +21,7 @@ allow = [
   "Bash(npx tsc:*)",
   "Bash(node scripts/:*)",
   "Bash(bash scripts/:*)",
-  "Bash(curl -fsS http://127.0.0.1:8787/*)",
+  "Bash(curl -fsS http://127.0.0.1:8081/*)",
 ]
 
 # 危险操作硬拦（无论何种模式）

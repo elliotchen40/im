@@ -205,7 +205,7 @@ CLI 写码 → daemon 校验并标记 `usedAt` → CLI 轮询到 `usedAt` 就打
 ## 8. 部署
 
 ```
-[鸿蒙 app] ──TLS──> [反向代理 nginx/caddy] ──> [im server:8787]
+[鸿蒙 app] ──TLS──> [反向代理 nginx/caddy] ──> [im server:8081]
                                                      │
                                      ┌───────────────┼───────────────┐
                                      ▼               ▼               ▼

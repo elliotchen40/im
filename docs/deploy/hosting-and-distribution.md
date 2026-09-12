@@ -24,7 +24,7 @@
 ### 原理
 
 ```
-app(手机) ──HTTPS──> Cloudflare 边缘 ──隧道出站连接──> cloudflared(你的机器) ──> 127.0.0.1:8787
+app(手机) ──HTTPS──> Cloudflare 边缘 ──隧道出站连接──> cloudflared(你的机器) ──> 127.0.0.1:8081
 ```
 
 `cloudflared` 在**你的机器上主动向外**连到 Cloudflare，所以：
@@ -39,7 +39,7 @@ app(手机) ──HTTPS──> Cloudflare 边缘 ──隧道出站连接──>
 
 ```bash
 # 安装 cloudflared 后：
-cloudflared tunnel --url http://127.0.0.1:8787
+cloudflared tunnel --url http://127.0.0.1:8081
 # 会输出形如 https://random-words-1234.trycloudflare.com 的地址
 ```
 
@@ -51,7 +51,7 @@ app 面板填那个 `https://...trycloudflare.com` 地址即可。
 cloudflared tunnel login
 cloudflared tunnel create im
 cloudflared tunnel route dns im im.example.com
-cloudflared tunnel run --url http://127.0.0.1:8787 im
+cloudflared tunnel run --url http://127.0.0.1:8081 im
 ```
 
 服务端配合改成只监听本机（由 cloudflared 转发）：
@@ -196,7 +196,7 @@ HarmonyOS NEXT 允许用**调试签名**把未上架的 HAP 装到真机，完�
 
 ```
 服务器（家里的机器/云主机，无公网 IP 也行）
-  └─ im server 监听 127.0.0.1:8787
+  └─ im server 监听 127.0.0.1:8081
   └─ cloudflared 命名隧道 → https://im.example.com（自动 TLS）
 
 鸿蒙 app

@@ -15,7 +15,7 @@
 
 ```
 ┌──────────────────────────── 你控制的机器 ────────────────────────────┐
-│  im server  (127.0.0.1:8787)                                         │
+│  im server  (127.0.0.1:8081)                                         │
 │     ├── LLM API（OpenAI 兼容）      ← 出网                             │
 │     ├── SiliconFlow embedding       ← 出网（记忆检索）                 │
 │     └── SQLite data/                ← 本地落盘                        │
@@ -47,7 +47,7 @@ cp .env.example .env
 ```env
 IM_APP_TOKEN=<openssl rand -hex 32>     # 两端共享密钥，必须与 app 端一致
 IM_BIND_HOST=127.0.0.1                  # 只监听本机，公网入口交给隧道
-IM_HTTP_PORT=8787
+IM_HTTP_PORT=8081
 
 MODEL_DSF_API_KEY=sk-xxx                # 模型 key（任意 OpenAI 兼容 provider）
 MODEL_DSF_BASE_URL=https://api.deepseek.com
@@ -62,7 +62,7 @@ SILICONFLOW_API_KEY=sk-xxx              # 记忆检索 embedding（必填，缺�
 npm install
 npm run dev
 # 另开一个终端：
-curl http://127.0.0.1:8787/im/health
+curl http://127.0.0.1:8081/im/health
 ```
 
 看到 `{"ret":0,"channel":"im",...}` 就说明服务端活着。
@@ -228,7 +228,7 @@ const DEFAULT_TOKEN: string = '<你的 token>';
 
 | # | 检查 | 期望 |
 |---|---|---|
-| 1 | 服务端本机 `curl http://127.0.0.1:8787/im/health` | `{"ret":0,...}` |
+| 1 | 服务端本机 `curl http://127.0.0.1:8081/im/health` | `{"ret":0,...}` |
 | 2 | 隧道域名 `curl https://im.example.com/im/health` | 同上（证明隧道通） |
 | 3 | **手机浏览器**打开 `https://im.example.com/im/health` | 同上（证明手机能到） |
 | 4 | app 配置面板填入地址 + token，点保存 | 状态变「已连接」 |

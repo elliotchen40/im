@@ -18,7 +18,7 @@ const KEY_TOKEN: string = 'app_token';
 const KEY_CURSOR: string = 'sync_cursor';
 
 /** 默认服务端地址；真机调试请改为局域网 IP / 域名（生产必须 https） */
-const DEFAULT_BASE_URL: string = 'http://127.0.0.1:8787';
+const DEFAULT_BASE_URL: string = 'http://127.0.0.1:8081';
 const DEFAULT_TOKEN: string = '';
 
 export class AppConfig {

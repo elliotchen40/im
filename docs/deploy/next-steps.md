@@ -66,7 +66,7 @@ vi .env
 
 ```env
 IM_APP_TOKEN=<上一步生成的随机串>
-IM_HTTP_PORT=8787
+IM_HTTP_PORT=8081
 IM_BIND_HOST=0.0.0.0              # 局域网方案要手机能连,填这个
                                   # 隧道方案改成 127.0.0.1(公网入口交给 cloudflared)
 
@@ -87,7 +87,7 @@ npm run dev          # 期望:看到 [channel/im] HTTP 长轮询通道已启动 
 ### 1.4 自测(另开一个终端)
 
 ```bash
-curl http://127.0.0.1:8787/im/health
+curl http://127.0.0.1:8081/im/health
 ```
 
 期望:
@@ -111,6 +111,8 @@ npm run mock         # 终端 1:本地假 LLM + 假 embedding,零费用零外网
 npm run dev:verify   # 终端 2:用 .env.verify 起 daemon(独立 DB data/verify_im.db)
 ```
 
+> `.env.verify` 的 `IM_HTTP_PORT` 同样是 8081,自测地址为 `http://127.0.0.1:8081/im/health`。
+
 ---
 
 ## 阶段 2:让手机能连上
@@ -119,12 +121,12 @@ npm run dev:verify   # 终端 2:用 .env.verify 起 daemon(独立 DB data/verify
 
 本项目的日常联调就是这条路:**开发机 180 跑服务端,手机装好 app 后直连测试,全程局域网、不用隧道**。
 
-1. 服务端地址:开发机 = `http://10.168.3.180:8787`(手机连同一个 Wi-Fi 即可直连;生产机 112 则是 `10.168.3.112`)
-2. 放行端口:`sudo ufw allow 8787/tcp`(或按实际环境放通 8787)
-3. **先用手机浏览器**打开 `http://10.168.3.180:8787/im/health`
+1. 服务端地址:开发机 = `http://10.168.3.180:18796`(手机连同一个 Wi-Fi 即可直连;生产机 112 则是 `http://10.168.3.112:8081`)
+2. 放行端口:宿主机上 `sudo ufw allow 18796/tcp`(容器把 8081 映射到宿主 18796)
+3. **先用手机浏览器**打开 `http://10.168.3.180:18796/im/health`
    - 能看到 JSON → 网络通了,继续
    - 打不开 → 防火墙/不同网段/容器端口没映射,先把这步解决
-4. `.env` 里设 `IM_PUBLIC_URL=http://10.168.3.180:8787`,重启 daemon
+4. `.env` 里设 `IM_PUBLIC_URL=http://10.168.3.180:18796`,重启 daemon
 
 > 此时 `IM_BIND_HOST=0.0.0.0`。
 > 明文 HTTP 需要 app 侧放行 —— 仓库已配好 `network_config.json`。
@@ -133,8 +135,8 @@ npm run dev:verify   # 终端 2:用 .env.verify 起 daemon(独立 DB data/verify
 
 | 坑 | 处理 |
 |---|---|
-| 服务端只听容器内部 | 容器内 `IM_BIND_HOST=0.0.0.0`,并把 8787 **映射到宿主 180**(如容器启动参数 `-p 8787:8787`) |
-| 二维码里是容器地址 | 容器内自动探测到的是容器 IP(172.x),手机扫了连不上 —— 必须显式设 `IM_PUBLIC_URL=http://10.168.3.180:8787` |
+| 服务端只听容器内部 | 容器内 `IM_BIND_HOST=0.0.0.0`,并把容器的 8081 **映射到宿主 18796**(容器启动参数 `-p 18796:8081`) |
+| 二维码里是容器地址 | 容器内自动探测到的是容器 IP(172.x),手机扫了连不上 —— 必须显式设 `IM_PUBLIC_URL=http://10.168.3.180:18796` |
 
 > 开发机**不需要隧道**,也不要把 `IM_BIND_HOST` 设成 `127.0.0.1` —— 那是生产机 112 的配法。
 
@@ -305,7 +307,7 @@ journalctl -u im-server | grep "care tick"
 
 | # | 在哪 | 命令 | 挂了说明 |
 |---|---|---|---|
-| 1 | 服务器上 | `curl http://127.0.0.1:8787/im/health` | 服务端本身没起 |
+| 1 | 服务器上 | `curl http://127.0.0.1:8081/im/health` | 服务端本身没起 |
 | 2 | 服务器上 | `curl https://im.example.com/im/health` | 隧道 / DNS / Cloudflare 边缘 |
 | 3 | 手机浏览器 | 打开 `https://im.example.com/im/health` | 手机网络 / 路由 |
 | 4 | app | 扫码登录 | 只有这一层挂,才是 app 的问题 |

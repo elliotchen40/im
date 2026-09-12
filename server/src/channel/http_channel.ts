@@ -43,7 +43,8 @@ import type {
 } from "./types.js";
 import { consumePairing, pairingFilePath, verifyPairingCode } from "../pair/pairing.js";
 
-export const DEFAULT_HTTP_PORT = 8787;
+/** HTTP 长轮询默认监听端口（可用 IM_HTTP_PORT 覆盖；开发机容器 8081 → 宿主 18796） */
+export const DEFAULT_HTTP_PORT = 8081;
 export const DEFAULT_LONG_POLL_TIMEOUT_MS = 35_000;
 const MAX_BODY_BYTES = 8 * 1024 * 1024; // 8MB，单条消息最多几张图
 const OUTBOX_KEEP = 1_000;
