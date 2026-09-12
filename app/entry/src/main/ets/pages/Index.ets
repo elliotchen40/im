@@ -545,23 +545,19 @@ struct Index {
     .width('100%')
     .height('100%')
     .backgroundColor(this.chatBgPath.length > 0 ? Color.Transparent : $r('app.color.chat_bg'))
-    // 让输入法展开时挤压父布局保持稳定，避免顶栏被顶上去
-    .expandSafeArea([SafeAreaType.KEYBOARD], [SafeAreaEdge.BOTTOM])
+    // 不要 expandSafeArea：HOS NEXT 默认行为是键盘弹出时窗口 resize、输入框跟随焦点避让，
+    // expandSafeArea 会让整列一起上移把顶栏挤走。
 
-    // 个人资料编辑面板 + 附件面板 —— 绑在根 Column 上（确保可点击弹出）
-    .bindSheet($$this.profileDialogOpen, this.profileDialogBuilder(), {
-      height: SheetSize.FIT_CONTENT,
-      dragBar: true,
-      title: { title: '编辑个人资料' },
-      // 字段名 keyboardAvoidMode，值类型用 SheetKeyboardAvoidMode（编译器的 did you mean 提示）
-      keyboardAvoidMode: SheetKeyboardAvoidMode.NONE,
-      showClose: false
+    // 个人资料编辑面板：用 bindContentCover（全屏模态）避免和底部 attachSheet 抢同一节点。
+    .bindContentCover($$this.profileDialogOpen, this.profileDialogBuilder(), {
+      modalTransition: ModalTransition.NONE,
+      backgroundColor: '#FFFFFFE0'
     })
+    // 附件面板（半屏 sheet，绑在根 Column 上）
     .bindSheet($$this.attachSheetOpen, this.attachSheetBuilder(), {
       height: SheetSize.FIT_CONTENT,
       dragBar: true,
       title: { title: '添加附件' },
-      keyboardAvoidMode: SheetKeyboardAvoidMode.NONE,
       showClose: false
     })
   }
@@ -781,6 +777,7 @@ struct Index {
       .width('100%')
     }
     .width('100%')
+    .height('100%')     // bindContentCover 全屏模态需要撑满，否则内容只占顶部
     .padding(20)
     .backgroundColor(Color.White)
   }
