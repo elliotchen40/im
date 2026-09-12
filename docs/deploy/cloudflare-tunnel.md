@@ -202,3 +202,104 @@ cloudflared tunnel --url http://127.0.0.1:8787
 
 把它填进 `IM_PUBLIC_URL` 就能先跑通全链路。缺点：**URL 每次重启都变**，只适合验证。
 稳定使用请按 §1 把域名托管上来。
+
+---
+
+## 9. 机器上**已经有隧道**时怎么接入（别把现有项目搞挂）
+
+典型场景：这台机器已经为别的项目跑着一个 cloudflared（例如 112 上的 `ourworld`）。
+你有两条路，**按是否愿意让现有服务共享故障域来选**。
+
+### 先看清现状
+
+```bash
+systemctl cat cloudflared.service          # ExecStart 长什么样、有没有 --config
+cloudflared tunnel list                    # 有几条隧道、哪条在跑
+ps aux | grep -v grep | grep cloudflared    # 实际进程
+```
+
+⚠️ 一个常见坑：配置**不一定在 `/etc/cloudflared/`**。
+若 `ExecStart=cloudflared tunnel run` 没带 `--config`，它会读**默认位置**，
+也就是 `/root/.cloudflared/config.yml`（以 root 跑时）。先 `cat` 确认再改。
+
+### 方案 A:复用现有隧道,只加一条 ingress（省一个进程）
+
+适用于：现有隧道与它的 hostname 互不相关，你不介意"改配置要重启、重启会短暂影响现有服务"。
+
+```bash
+# 1) 给现有隧道加一条 DNS（<你的项目域名> 换成实际域名）
+cloudflared tunnel route dns <现有隧道名或UUID> <你的项目域名>
+
+# 2) 编辑现有 config.yml，**在最后的 http_status:404 之前**插入两条：
+#      - hostname: <你的项目域名>
+#        service: http://localhost:<你的端口>
+
+# 3) 重启（会有几秒影响现有项目 —— 选低峰期做）
+systemctl restart cloudflared
+```
+
+改完 `config.yml` 应当是这样（**已有规则一条都别动**）：
+
+```yaml
+tunnel: <现有隧道UUID>
+credentials-file: /root/.cloudflared/<现有隧道UUID>.json
+
+ingress:
+  - hostname: 现有项目.example.com          # ← 原有，别动
+    service: http://localhost:8000
+  - hostname: <你的项目域名>                # ← 新增的这两行
+    service: http://localhost:8787
+  - service: http_status:404                # ← 兜底必须留在最后
+```
+
+### 方案 B:独立隧道 + 独立服务（互不影响,生产更稳）
+
+适用于：想让两边的重启/故障**完全隔离**，或多一条凭据无所谓。
+
+```bash
+cloudflared tunnel create <新隧道名>
+cloudflared tunnel route dns <新隧道名> <你的项目域名>
+
+# 独立配置文件（与现有那个并存，互不覆盖）
+cat > /root/.cloudflared/<新隧道名>-config.yml <<'YAML'
+tunnel: <新隧道UUID>
+credentials-file: /root/.cloudflared/<新隧道UUID>.json
+ingress:
+  - hostname: <你的项目域名>
+    service: http://localhost:8787
+  - service: http_status:404
+YAML
+
+# 独立 service（注意服务名不能与现有的 cloudflared.service 重名）
+cat > /etc/systemd/system/cloudflared-<新隧道名>.service <<'UNIT'
+[Unit]
+Description=Cloudflare Tunnel (<新隧道名>)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/local/bin/cloudflared tunnel --config /root/.cloudflared/<新隧道名>-config.yml run
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+systemctl daemon-reload && systemctl enable --now cloudflared-<新隧道名>
+```
+
+> 💡 已经有别人替你建好一条空隧道的话（`cloudflared tunnel list` 里能看到、但没有连接），
+> 方案 B 可以直接拿它来用，不必再 `create`。
+
+### 两种方案的取舍
+
+| | 方案 A（复用） | 方案 B（独立） |
+|---|---|---|
+| 进程数 | 1 个 cloudflared 跑所有 hostname | 2 个 |
+| 改配置影响面 | 重启会**短暂影响现有项目** | 互不影响 ✅ |
+| 凭据 | 复用现有 | 多一份 |
+| 适用 | 小机器、省资源、能接受低峰重启 | 生产、要求故障隔离 |
+| 配额 | 无额外消耗 | 隧道数量按账号配额（Cloudflare 免费版够用） |
+
