@@ -303,8 +303,8 @@ journalctl -u im-server | grep "care tick"
 1. **app 已实编通过**(DevEco Studio 26.0.0 / hvigor 6.26.4,`hvigorw assembleHap` ✅)。
    实测唯一的编译阻塞是 `Pairing.ets` 里的 `Record<string, string>` 对象字面量
    (ArkTS 不允许无类型对象字面量,已改为显式 `interface PairBody`)。
-   还剩 10 条 WARN(`getContext`/`showToast` deprecated、"may throw exceptions"),
-   不影响构建。
+   ArkTS 告警也已清零(`getContext`/`showToast` 改走 `UIContext` 版本,
+   `preferences`/`http` 调用补 try/catch)。
 2. **ScanKit 的相机权限** —— 默认扫码 UI 由系统提供,通常不需要声明权限;
    若你的 SDK 版本报错,在 `module.json5` 加 `ohos.permission.CAMERA`。
 

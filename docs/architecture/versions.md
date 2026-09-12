@@ -6,7 +6,7 @@
 |---|---|---|---|
 | `v0.1.0` | 2026-09-12 | **骨架 + 渠道抽象 + 端到端验证**：im 项目建立；上游 wx-robot-ilink 内核（ai/memory/care/soul）全套移植；新增 `channel/` 抽象层与 `HttpChannel` 自研 IM 协议实现；`bot.ts` 14 处渠道耦合清零并拆分为 `commands.ts` + `care/scheduled_tick.ts`；能力规格与协议规范落盘；鸿蒙 ArkTS 工程骨架；服务端通过类型检查与端到端闭环验证（含重启保持），并修复 1 个启动期缺陷 | ① 鸿蒙工程未经 DevEco 编译 ② 无 WS 推送 / E2E 加密 / 多设备 ③ DB 命名债务未清（`wechat_user_id` / `channel='wechat'`）④ 主动关怀 / SOUL 切换 / summarizer 未做端到端 UAT |
 
-| `v0.2.1` | 2026-09-12 | **鸿蒙工程实编通过**：在 DevEco Studio 26.0.0（hvigor 6.26.4 / SDK API 26）上执行 `hvigorw assembleHap` 成功；修复 `Pairing.ets` 的无类型对象字面量（`arkts-no-untyped-obj-literals`）；补 `app/hvigor/hvigor-config.json5` 使命令行也能构建 | ① 产物未签名（装机需 DevEco 自动签名 + 华为账号）② 10 条 ArkTS WARN 未清（deprecated API / may-throw）③ 未做真机联调 ④ 无 WS 推送 / E2E 加密 / 多设备 ⑤ DB 命名债务未清 |
+| `v0.2.1` | 2026-09-12 | **鸿蒙工程实编通过**：在 DevEco Studio 26.0.0（hvigor 6.26.4 / SDK API 26）上执行 `hvigorw assembleHap` 成功；修复 `Pairing.ets` 的无类型对象字面量（`arkts-no-untyped-obj-literals`）；补 `app/hvigor/hvigor-config.json5` 使命令行也能构建 | ① 产物未签名（装机需 DevEco 自动签名 + 华为账号）② 未做真机联调 ③ 无 WS 推送 / E2E 加密 / 多设备 ④ DB 命名债务未清 |
 
 | `v0.2.0` | 2026-09-12 | **扫码登录 + 工程可编译 + 部署物**：新增扫码配对（`/im/pair` + `npm run pair` 二维码 CLI，一次性 / 5 分钟 / 失败限次）；鸿蒙工程补上 AppScope 等硬阻塞项（原先缺失导致 DevEco 打不开工程）、图标改真实 PNG、ImClient 按 ArkTS 约束加固、新增扫码登录面板与 Pairing 服务；服务端部署物（systemd 单元 + cloudflared 模板）与四份部署文档 | ① 鸿蒙工程仍未在 DevEco 实编 ② 无 WS 推送 / E2E 加密 / 多设备 ③ DB 命名债务未清 ④ 主动关怀 / SOUL 切换 / summarizer 未做端到端 UAT |
 
@@ -21,7 +21,10 @@
    ArkTS 禁止无类型对象字面量（`arkts-no-untyped-obj-literals`，错误码 10605038）。
 2. **补 `app/hvigor/hvigor-config.json5`**（`modelVersion: 5.0.0`）：DevEco 首次打开工程会生成，
    命令行构建同样需要；缺失时 hvigor 直接报 `00304004 Not Found`。
-3. **构建环境事实（留档）**：hvigor 的 `PackageHap` 用 `java -jar app_packing_tool.jar` 打包 ——
+3. **清掉 10 条 ArkTS WARN**：`getContext` → `this.getUIContext().getHostContext()`、
+   `promptAction.showToast` → `getPromptAction().showToast()`，`preferences` / `http.request`
+   调用补 `try/catch`（失败语义不变：读回落 fallback、请求异常继续抛给 `pollLoop` 退避重试）。
+4. **构建环境事实（留档）**：hvigor 的 `PackageHap` 用 `java -jar app_packing_tool.jar` 打包 ——
    本机 `java` 不可用（macOS 未装 JDK）时会报 `00308018 Unknown Error / Tools execution failed.`；
    把 `JAVA_HOME` 指向 DevEco 自带 JBR（`<DevEco>/Contents/jbr/Contents/Home`）即可。
 
@@ -31,7 +34,7 @@
 |---|---|
 | `hvigorw assembleHap --no-daemon`（DevEco 26.0.0 / hvigor 6.26.4 / SDK API 26） | ✅ BUILD SUCCESSFUL |
 | 产物 `entry/build/default/outputs/default/entry-default-unsigned.hap` | ✅ 94 KB：`module.json` + `resources.index` + `ets/modules.abc` 等 10 项齐备 |
-| ArkTS 编译 | ✅ 0 ERROR / 10 WARN（deprecated API、may-throw 提示；不影响构建） |
+| ArkTS 编译 | ✅ 0 ERROR / 0 WARN |
 | 签名 HAP / 真机安装 | ❌ 未做（需在 DevEco 中登录华为开发者账号生成调试签名） |
 
 ---
