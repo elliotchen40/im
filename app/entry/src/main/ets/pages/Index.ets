@@ -553,15 +553,15 @@ struct Index {
       height: SheetSize.FIT_CONTENT,
       dragBar: true,
       title: { title: '编辑个人资料' },
-      // 关键：keyboardAvoidMode 让 sheet 自己避让键盘，主布局不动
-      keyboardAvoidMode: KeyboardAvoidMode.NONE,
+      // 关键：sheetKeyboardAvoidMode 让 sheet 自己避让键盘，主布局不动
+      sheetKeyboardAvoidMode: SheetKeyboardAvoidMode.NONE,
       showClose: false
     })
     .bindSheet($$this.attachSheetOpen, this.attachSheetBuilder(), {
       height: SheetSize.FIT_CONTENT,
       dragBar: true,
       title: { title: '添加附件' },
-      keyboardAvoidMode: KeyboardAvoidMode.NONE,
+      sheetKeyboardAvoidMode: SheetKeyboardAvoidMode.NONE,
       showClose: false
     })
   }

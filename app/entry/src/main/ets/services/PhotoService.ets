@@ -51,22 +51,24 @@ export class PhotoService {
       const stamp = Date.now().toString(36);
       const dest = cacheDir + '/' + prefix + '_' + stamp + '.jpg';
       // openSync 在 ArkTS 里返回 File 对象（不是 number fd）。
-      // 用 File.read / File.write 实例方法（async），参数是 ArrayBuffer。
-      // 分块循环读到 EOF，写到 dest。
+      // File 实例上**没有** .read/.write/.close 方法 —— 必须通过 .fd 拿 number fd，
+      // 再用 fs.readSync/writeSync/closeSync。
       const srcFile = fs.openSync(src, fs.OpenMode.READ_ONLY);
       const dstFile = fs.openSync(dest, fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
+      const srcFd: number = srcFile.fd;
+      const dstFd: number = dstFile.fd;
       const buf = new ArrayBuffer(64 * 1024);
       try {
         while (true) {
-          const n: number = await srcFile.read(buf);
-          if (n === undefined || n <= 0) {
+          const n: number = fs.readSync(srcFd, buf);
+          if (n <= 0) {
             break;
           }
-          await dstFile.write(buf, n);
+          fs.writeSync(dstFd, buf, n);
         }
       } finally {
-        await srcFile.close();
-        await dstFile.close();
+        fs.closeSync(srcFd);
+        fs.closeSync(dstFd);
       }
       return { path: dest, error: '' };
     } catch (e) {
