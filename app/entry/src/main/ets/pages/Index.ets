@@ -541,76 +541,25 @@ struct Index {
       } else {
         this.setupPanel()
       }
-
-      // 个人资料编辑面板：if + 全屏 Stack 内联渲染（不依赖 bindContentCover / bindSheet），
-      // 避免和任何 sheet 链式注册打架。
-      if (this.profileDialogOpen) {
-        Stack() {
-          // 半透明遮罩，点击空白关闭
-          Column()
-            .width('100%')
-            .height('100%')
-            .backgroundColor('#00000060')
-            .onClick(() => {
-              this.profileDialogOpen = false;
-            })
-          // 内容卡片
-          Column() {
-            this.profileDialogBuilder()
-          }
-          .width('100%')
-          .height('100%')
-          .backgroundColor(Color.White)
-          .padding(20)
-        }
-        .width('100%')
-        .height('100%')
-        .position({ x: 0, y: 0 })
-        .zIndex(100)
-      }
-
-      // 附件面板：用 if + Stack 内联渲染（底部 sheet 视觉），完全脱离 bindSheet
-      if (this.attachSheetOpen) {
-        Stack() {
-          // 半透明遮罩
-          Column()
-            .width('100%')
-            .height('100%')
-            .backgroundColor('#00000060')
-            .onClick(() => {
-              this.attachSheetOpen = false;
-            })
-          // 底部内容卡
-          Column() {
-            Text('添加附件')
-              .fontSize(16)
-              .fontWeight(FontWeight.Bold)
-              .fontColor($r('app.color.text_primary'))
-              .width('100%')
-              .textAlign(TextAlign.Start)
-              .margin({ bottom: 12 })
-            this.attachSheetBuilder()
-          }
-          .width('100%')
-          .backgroundColor(Color.White)
-          .padding(20)
-          .borderRadius({ topLeft: 16, topRight: 16 })
-          .alignItems(HorizontalAlign.Start)
-          // 定位到底部：内容高度自适应，从屏幕底部往上推
-          .position({ x: 0, y: '60%' })
-        }
-        .width('100%')
-        .height('100%')
-        .position({ x: 0, y: 0 })
-        .zIndex(101)
-      }
     }
     .width('100%')
     .height('100%')
     .backgroundColor(this.chatBgPath.length > 0 ? Color.Transparent : $r('app.color.chat_bg'))
     // 不要 expandSafeArea：HOS NEXT 默认行为是键盘弹出时窗口 resize、输入框跟随焦点避让，
     // expandSafeArea 会让整列一起上移把顶栏挤走。
-  }
+
+    // 个人资料编辑面板：用 bindContentCover（全屏模态）避免和底部 attachSheet 抢同一节点。
+    .bindContentCover($$this.profileDialogOpen, this.profileDialogBuilder(), {
+      modalTransition: ModalTransition.NONE,
+      backgroundColor: '#FFFFFFE0'
+    })
+    // 附件面板（半屏 sheet，绑在根 Column 上）
+    .bindSheet($$this.attachSheetOpen, this.attachSheetBuilder(), {
+      height: SheetSize.FIT_CONTENT,
+      dragBar: true,
+      title: { title: '添加附件' },
+      showClose: false
+    })
   }
 
   // ----------------------------------------------------------- 聊天主面板
