@@ -547,7 +547,6 @@ struct Index {
     .backgroundColor(this.chatBgPath.length > 0 ? Color.Transparent : $r('app.color.chat_bg'))
     // 让输入法展开时挤压父布局保持稳定，避免顶栏被顶上去
     .expandSafeArea([SafeAreaType.KEYBOARD], [SafeAreaEdge.BOTTOM])
-    .resizable(true)
 
     // 个人资料编辑面板 + 附件面板 —— 绑在根 Column 上（确保可点击弹出）
     .bindSheet($$this.profileDialogOpen, this.profileDialogBuilder(), {

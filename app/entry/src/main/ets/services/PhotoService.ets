@@ -29,8 +29,8 @@ export class PhotoService {
    * 为什么不能直接 copyFileSync(src, dest)：
    *   picker 返回的是 `file://media/Photo/...` 形式的 uri，不是普通文件系统路径，
    *   fileIo.copyFileSync 不接受它（报 no such file or directory）。
-   *   正确方式：先确保 cacheDir 存在，再用 fs.openSync 按 uri 打开 → fs.copyFileSync
-   *   从 fd 拷到 dest。
+   *   正确方式：先确保 cacheDir 存在，再用 fs.openSync 按 uri 打开 → File 实例方法
+   *   逐块读/写到目标文件 —— 完全绕开 uri 解析层。
    */
   static async pickAndCache(context: common.Context, prefix: string): Promise<PickedPhoto> {
     try {
@@ -50,24 +50,23 @@ export class PhotoService {
       }
       const stamp = Date.now().toString(36);
       const dest = cacheDir + '/' + prefix + '_' + stamp + '.jpg';
-      // HarmonyOS NEXT 上 picker 返回的 file://media/Photo/... uri 不能直接给 fs.copyFile
-      // （报 no such file or directory）。最稳的做法：openSync 按 uri 打开 → 逐块读 → writeSync
-      // 写到自己 cache 的目标文件 —— 完全绕开 uri 解析层。
+      // openSync 在 ArkTS 里返回 File 对象（不是 number fd）。
+      // 用 File.read / File.write 实例方法（async），参数是 ArrayBuffer。
+      // 分块循环读到 EOF，写到 dest。
       const srcFile = fs.openSync(src, fs.OpenMode.READ_ONLY);
       const dstFile = fs.openSync(dest, fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
-      const bufSize = 64 * 1024;
-      const buf = new ArrayBuffer(bufSize);
+      const buf = new ArrayBuffer(64 * 1024);
       try {
         while (true) {
-          const n = fs.readSync(srcFile, buf);
+          const n: number = await srcFile.read(buf);
           if (n === undefined || n <= 0) {
             break;
           }
-          fs.writeSync(dstFile, buf, n);
+          await dstFile.write(buf, n);
         }
       } finally {
-        fs.closeSync(srcFile);
-        fs.closeSync(dstFile);
+        await srcFile.close();
+        await dstFile.close();
       }
       return { path: dest, error: '' };
     } catch (e) {
