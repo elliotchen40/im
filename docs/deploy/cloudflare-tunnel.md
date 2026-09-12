@@ -2,6 +2,9 @@
 
 > 目的：让手机在外面（4G/5G）也能连到你家/机房里那台没有公网 IP 的服务器。
 >
+> 本项目的用法很确定：**只给生产机 112（`10.168.3.112`）建隧道**；开发机 180（`10.168.3.180`）
+> 永远在局域网内联调（手机连同一 Wi-Fi 直连 `http://10.168.3.180:8787`），**不建隧道**。
+>
 > 本文覆盖：域名托管 → 建隧道 → 凭证分发 → **开发机 / 生产机双环境** → 常驻与验证 → 排错。
 
 ---
@@ -21,7 +24,7 @@
 
 | 做法 | 隧道数 | 适用 |
 |---|---|---|
-| **A. 只给生产机建隧道**（推荐先这样） | 1 条 | 开发机就在局域网里联调，用 `http://<Mac的IP>:8787` 直连，根本不需要隧道 |
+| **A. 只给生产机建隧道**（推荐先这样） | 1 条 | 开发机（`10.168.3.180`）就在同一局域网里联调，用 `http://10.168.3.180:8787` 直连，根本不需要隧道 |
 | **B. 开发 + 生产各一条，用不同子域名** | 2 条 | `im-dev.example.com` → 开发机；`im.example.com` → 生产机 |
 | C. 多台机器跑**同一个隧道** | 1 条 | ⚠️ 这是**高可用**语义：Cloudflare 会把请求轮流打到各台机器。**不能**用来区分开发/生产 |
 
@@ -31,9 +34,9 @@
 推荐路线：
 
 ```
-阶段 1（联调）   Mac 跑 server  ←──同一 Wi-Fi──→  手机        # 不用隧道，最快
-阶段 2（生产）   常开机器 + 隧道 + im.example.com              # 手机随时可用
-阶段 3（可选）   开发机 + 隧道 + im-dev.example.com            # 出差也要连开发机时
+阶段 1（联调）   开发机 10.168.3.180 跑 server ←──同一局域网──→ 手机   # 不用隧道，最快
+阶段 2（生产）   112（10.168.3.112）+ 隧道 + im.example.com            # 手机随时可用
+阶段 3（可选）   开发机也建一条隧道 + im-dev.example.com                # 出差也要连开发机时
 ```
 
 ---
@@ -56,7 +59,7 @@
 
 ## 2. 建隧道(一次性操作)
 
-在**任意一台**机器上做（比如你的 Mac），只需要做一次：
+在**任意一台**机器上做（本项目用的是 MacBook；凭证是**账号级**的，与目标机无关），只需要做一次：
 
 ```bash
 # macOS 安装
@@ -95,11 +98,11 @@ cloudflared tunnel route dns im-dev im-dev.example.com
 
 ## 3. 分发到目标机器
 
-以生产机为例（Linux 小主机 / 云主机）：
+以生产机 **112**（`10.168.3.112`）为例：
 
 ```bash
 # 在 Mac 上：把生产隧道的凭证与配置推过去
-scp ~/.cloudflared/<生产隧道UUID>.json  user@prod-host:/tmp/
+scp ~/.cloudflared/<生产隧道UUID>.json  <user>@10.168.3.112:/tmp/
 # 在目标机上：
 sudo mkdir -p /etc/cloudflared
 sudo mv /tmp/<生产隧道UUID>.json /etc/cloudflared/
@@ -126,7 +129,7 @@ ingress:
   - service: http_status:404
 ```
 
-生产机这么配（开发机把 hostname 换成 `im-dev.example.com` 即可，其余一样）。
+生产机 **112** 这么配（若开发机也要隧道，把 hostname 换成 `im-dev.example.com`，其余一样）。
 
 常驻（systemd，官方脚本会装好单元并读 `/etc/cloudflared/config.yml`）：
 
@@ -137,7 +140,7 @@ systemctl status cloudflared
 journalctl -u cloudflared -f
 ```
 
-macOS 开发机可以偷懒不用常驻：
+只想临时联调可以不用常驻：
 
 ```bash
 cloudflared tunnel run im-dev      # 前台跑着，Ctrl+C 结束
@@ -151,7 +154,7 @@ cloudflared tunnel run im-dev      # 前台跑着，Ctrl+C 结束
 手机一出门就连不上。
 
 ```env
-# server/.env
+# 生产机 112：/opt/im/server/.env
 IM_BIND_HOST=127.0.0.1            # 只监听本机，公网入口交给 cloudflared
 IM_PUBLIC_URL=https://im.example.com   # ← 必须改成隧道域名（写进配对二维码）
 ```

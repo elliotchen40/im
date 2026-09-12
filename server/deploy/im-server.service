@@ -1,13 +1,26 @@
 # ============================================================
 # im server —— systemd 服务单元
 # ============================================================
-# 安装（在服务器上，root）：
-#   1) 代码同步到 /opt/im/server（rsync 时排除 node_modules / data / .env）
+# 机器拓扑（详见 DEPLOY.md）：
+#   生产机 = 112（10.168.3.112）        ← 本单元跑在这里：/opt/im/server
+#   开发机 = 180（10.168.3.180，容器 fanny）← 只做开发/联调，**不建隧道**
+#   MacBook                             ← 只编译鸿蒙 app，不跑服务端
+#
+# 安装（在 112 上，root 身份）：
+#   1) 同步代码到 /opt/im/server，**不要带 data/**
+#      ⚠️ 开发机容器里**没有 rsync**，用 tar + ssh 管道：
+#        tar czf - --exclude='server/node_modules' --exclude='server/data' \
+#          --exclude='server/.env' --exclude='server/dist' server | \
+#          ssh <user>@10.168.3.112 "mkdir -p /opt/im && tar xzf - -C /opt/im"
 #   2) cd /opt/im/server && npm install && npm run build
-#   3) cp .env.example .env  并填 IM_APP_TOKEN / 模型 key / SILICONFLOW_API_KEY
+#   3) cp .env.example .env 并填 IM_APP_TOKEN / 模型 key / SILICONFLOW_API_KEY
+#      （模型与 embedding key 可复用同机 /opt/wx-robot/.env）
 #   4) cp deploy/im-server.service /etc/systemd/system/
 #      systemctl daemon-reload && systemctl enable --now im-server
 #   5) 查看：systemctl status im-server ; tail -f /var/log/im-server.log
+#
+# ⚠️ 不要按早期版本去 `useradd im` + `sudo -u im` —— 112 上没有 im 用户，
+#    本单元也不设 User=，以 root 运行（与同机 hitch.service 一致）。
 #
 # 设计说明（与同机 hitch.service 保持一致的取舍）：
 #   - ExecStart 用 `env node` 而不是绝对路径 —— 不依赖 node 装在哪

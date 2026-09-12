@@ -11,7 +11,8 @@
 
 | 需要 | 说明 | 必需? |
 |---|---|---|
-| 一台**常开**的机器 | Linux 小主机 / 树莓派 / 云主机。MacBook 也行,但合盖休眠手机就连不上 | ✅ |
+| 生产机 **112**(`10.168.3.112`) | 常开小主机;服务端生产环境(systemd + cloudflared 隧道),路径 `/opt/im/server` | ✅ |
+| 开发机(`10.168.3.180` 容器 `fanny`) | 服务端开发/联调,容器内路径 `/.openclaw/team-shared/projects/im` | ✅ |
 | MacBook + **DevEco Studio** | 编译 HAP 用;需登录华为开发者账号(个人实名,免费) | ✅ |
 | 一台鸿蒙手机 | HarmonyOS NEXT(API 12+) | ✅ |
 | LLM API key | 任意 OpenAI 兼容(DeepSeek / 智谱 / MiniMax…) | ✅ |
@@ -21,8 +22,8 @@
 先想清楚你要哪种连接方式:
 
 ```
-方案 A(先跑通,最快)   Mac/服务器  ←──同一 Wi-Fi──→  手机       # 不需要隧道、不需要域名
-方案 B(最终形态)       服务器 + cloudflared ──→ https://你的域名  # 手机在外面也能用
+方案 A(先跑通,最快)   开发机 10.168.3.180 ←──同一局域网──→ 手机   # 不需要隧道、不需要域名
+方案 B(最终形态)       112(10.168.3.112) + cloudflared ──→ https://你的域名
 ```
 
 **建议先走 A 把端到端跑通,再升级到 B。** 这样出问题时变量少。
@@ -33,9 +34,23 @@
 
 ### 1.1 把项目放到目标机器
 
+三台机器的角色与路径(完整版见 `DEPLOY.md §机器拓扑`):
+
+| 机器 | 地址 | 服务端代码路径 |
+|---|---|---|
+| 开发机 | `10.168.3.180`(容器 `fanny`) | 容器内 `/.openclaw/team-shared/projects/im` |
+| 生产机 **112** | `10.168.3.112` | `/opt/im/server` |
+| MacBook | — | 只编译鸿蒙 app,不跑服务端 |
+
+生产机(112)首次落代码:
+
 ```bash
-# 假设放到 /opt/im
-sudo mkdir -p /opt/im && sudo cp -r <项目路径>/server /opt/im/
+# 从 MacBook / 开发机把 server/ 同步过去(**不要带 data/**)
+rsync -a --exclude data/ server/ <user>@10.168.3.112:/opt/im/server/
+# 或直接在 112 上:
+#   git clone git@github.com:elliotchen40/im.git /opt/im-src \
+#     && sudo mkdir -p /opt/im && sudo cp -r /opt/im-src/server /opt/im/
+ssh <user>@10.168.3.112 'cd /opt/im/server && npm install'
 cd /opt/im/server
 ```
 
@@ -102,15 +117,26 @@ npm run dev:verify   # 终端 2:用 .env.verify 起 daemon(独立 DB data/verify
 
 ### 方案 A:局域网(先跑通,推荐第一步)
 
-1. 查服务器 IP:`ip addr | grep 'inet '`(Mac 上是 `ipconfig getifaddr en0`)
-2. 放行端口:`sudo ufw allow 8787/tcp`
-3. **先用手机浏览器**打开 `http://<服务器IP>:8787/im/health`
+本项目的日常联调就是这条路:**开发机 180 跑服务端,手机装好 app 后直连测试,全程局域网、不用隧道**。
+
+1. 服务端地址:开发机 = `http://10.168.3.180:8787`(手机连同一个 Wi-Fi 即可直连;生产机 112 则是 `10.168.3.112`)
+2. 放行端口:`sudo ufw allow 8787/tcp`(或按实际环境放通 8787)
+3. **先用手机浏览器**打开 `http://10.168.3.180:8787/im/health`
    - 能看到 JSON → 网络通了,继续
-   - 打不开 → 防火墙/不同网段,先把这步解决
-4. `.env` 里设 `IM_PUBLIC_URL=http://<服务器IP>:8787`,重启 daemon
+   - 打不开 → 防火墙/不同网段/容器端口没映射,先把这步解决
+4. `.env` 里设 `IM_PUBLIC_URL=http://10.168.3.180:8787`,重启 daemon
 
 > 此时 `IM_BIND_HOST=0.0.0.0`。
 > 明文 HTTP 需要 app 侧放行 —— 仓库已配好 `network_config.json`。
+
+**开发机是在容器 `fanny` 里跑服务的,这两个坑必须处理**(否则手机连不上、或扫码拿到错地址):
+
+| 坑 | 处理 |
+|---|---|
+| 服务端只听容器内部 | 容器内 `IM_BIND_HOST=0.0.0.0`,并把 8787 **映射到宿主 180**(如容器启动参数 `-p 8787:8787`) |
+| 二维码里是容器地址 | 容器内自动探测到的是容器 IP(172.x),手机扫了连不上 —— 必须显式设 `IM_PUBLIC_URL=http://10.168.3.180:8787` |
+
+> 开发机**不需要隧道**,也不要把 `IM_BIND_HOST` 设成 `127.0.0.1` —— 那是生产机 112 的配法。
 
 ### 方案 B:Cloudflare 隧道(最终形态)
 

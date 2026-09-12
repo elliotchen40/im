@@ -5,6 +5,34 @@
 
 ---
 
+## 机器拓扑（现行）
+
+| 机器 | 地址 | 角色 | 服务端代码路径 |
+|---|---|---|---|
+| MacBook（本机） | — | **只做鸿蒙客户端**：DevEco 编译 / 签名 / 装机 | ❌ 不跑服务端 |
+| 开发机 | `10.168.3.180`（容器 `fanny`） | 服务端**开发 / 联调**（日常开发在这里） | 容器内 `/.openclaw/team-shared/projects/im` |
+| 生产机（**112**） | `10.168.3.112` | 服务端**生产**：systemd 常驻 + cloudflared 隧道 | `/opt/im/server` |
+
+分工是有意的：服务端**不在 MacBook 上跑**（合盖休眠手机就连不上），MacBook 只负责出 HAP；
+开发机在容器 `fanny` 里迭代、**只在局域网内联调（不用隧道）**；生产机 112 才跑隧道 + 稳定版本。
+
+> 开发机的联调姿势：服务端跑在容器里 → 需把 8787 映射到宿主 180、容器内 `IM_BIND_HOST=0.0.0.0`，
+> 并显式设 `IM_PUBLIC_URL=http://10.168.3.180:8787`（否则配对二维码里是容器 IP，手机连不上）。
+> 手机装 app 后直连 `http://10.168.3.180:8787/im/health` 验通，再用「手动填写」或扫码配对。
+
+## 代码怎么过去（只记路径与同步方式，代码本身不入文档）
+
+| 方向 | 方式 |
+|---|---|
+| 唯一的代码事实源 | GitHub `origin` = `git@github.com:elliotchen40/im.git` |
+| MacBook ⇄ 开发机 | 各自 `git pull` / `git push`；开发机在容器 `fanny` 内的 `/.openclaw/team-shared/projects/im` 操作 |
+| 开发机 → 生产机 112 | ⚠️ 开发机容器**没有 `rsync`** → 用 `tar` + ssh 管道（见下），或在 112 上 `git clone` |
+| 首次落生产机 | 管道解包到 `/opt/im`（见下）+ `npm install && npm run build` |
+
+> **绝不跨越 `data/`**：`server/data/` 属于运行它的那台机器（112 有自己的 `im_bot.db` + `soul/wx_bot_*.db`）。
+
+---
+
 ## 当前部署状态（2026-09-12 · 已部署到 112）
 
 | 项 | 值 |
@@ -37,7 +65,7 @@
 ### 部署命令（复现用）
 
 ```bash
-# 本机 → 112：本机容器**没有 rsync**，用 tar + ssh 管道
+# 开发机 → 112：开发机容器**没有 rsync**，用 tar + ssh 管道
 tar czf - --exclude='server/node_modules' --exclude='server/data' --exclude='server/.env' \
   --exclude='server/dist' server | \
   sshpass -p '<password>' ssh -o StrictHostKeyChecking=no root@10.168.3.112 \
@@ -100,6 +128,9 @@ cd /opt/im/server && npm run pair
 > ⚠️ **不要**给这个域名开 Cloudflare Access —— 它要求浏览器登录，
 > 会把只发 Bearer token 的 app 挡在门外。
 
+> 📄 给 112 上 AI 的**执行用任务单**已放在生产机：**`/opt/im/TUNNEL_SETUP_TASK.md`**（含现状核查、
+> 硬约束、两方案完整命令、验收、回滚、排错）。
+
 ---
 
 ## 部署物（仓库里）
@@ -118,7 +149,8 @@ cd /opt/im/server && npm run pair
 | 项 | 值 |
 |---|---|
 | **端口** | `8787`（`IM_HTTP_PORT`）；112 上仅听 `127.0.0.1` |
-| **cloudflared** | ✅ **需要** —— 方向与 iLink 相反（手机主动连服务端），**必须有 TLS** |
+| **机器** | 开发机 `10.168.3.180`（容器 `fanny`）· 生产机 **112** = `10.168.3.112` · MacBook 只编译 app |
+| **cloudflared** | ✅ **需要，但只给生产机 112** —— 开发机 180 一律局域网直连、**不建隧道**。方向与 iLink 相反（手机主动连服务端），**必须有 TLS** |
 | 运行形态 | `npm run build` → `node --env-file=.env dist/index.js`（生产不必带 tsx） |
 | 必填环境变量 | `IM_APP_TOKEN`、`MODEL_<NAME>_API_KEY`、`SILICONFLOW_API_KEY` |
 | **隧道场景必改两项** | `IM_BIND_HOST=127.0.0.1` + `IM_PUBLIC_URL=https://你的域名` |
@@ -145,10 +177,11 @@ cd /opt/im/server && npm run pair
 
 ## 部署待办
 
-- [x] 选机器（112）+ 同步代码 + `npm install && npm run build`
-- [x] 装 `im-server.service` 并启动（active；未影响 hitch / ourworld / cloudflared）
+- [x] 选机器：开发机 `10.168.3.180`（容器 `fanny`）跑开发；生产机 **112** = `10.168.3.112`
+- [x] 把 `server/` 同步到 112 的 `/opt/im/server`（开发机容器无 rsync → 用 tar + ssh 管道，**不带 `data/`**）
+- [x] `npm install && npm run build`，装 `im-server.service` 并启动（active；未影响 hitch / ourworld / cloudflared）
 - [x] 端到端实测（真实 LLM + 落库双写）
-- [ ] **隧道接入**（Elliot 在 112 上建；方案 A/B 见上）
-- [ ] 设 `IM_PUBLIC_URL` + 重启 + 四层验证
+- [ ] **隧道接入**（Elliot 在 112 上建；方案 A/B 见上；执行任务单 `/opt/im/TUNNEL_SETUP_TASK.md`）
+- [ ] 设 `IM_PUBLIC_URL` + 重启 + 四层验证（本机 curl → 隧道 curl → 手机浏览器 → app）
 - [ ] `npm run pair` + app 扫码 → 首次对话
 - [ ] 观察 24h 日志（主动关怀 tick / summarizer 触发）
