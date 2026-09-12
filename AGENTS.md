@@ -62,11 +62,19 @@ npm run typecheck      # tsc --noEmit，必须零错误
 npm run dev            # 启动后 curl /im/health 探活
 ```
 
-**鸿蒙端**（当前环境无 DevEco / HarmonyOS SDK，无法本机编译）：
+**鸿蒙端**（已在装有 DevEco Studio 26.0.0 的 Mac 上验证，完整命令见 `app/README.md §一`）：
 
-- 提交前必须人工核对：`module.json5` 权限声明、`oh-package.json5` 依赖、
-  ArkTS 语法（不允许 `any`、不允许动态属性访问）。
-- 需要在有 DevEco Studio 的环境执行 `hvigorw assembleHap` 后才能宣称「可运行」。
+```bash
+cd app
+JAVA_HOME=<DevEco>/Contents/jbr/Contents/Home PATH="$JAVA_HOME/bin:$PATH" \
+NODE_HOME=<DevEco>/Contents/tools/node DEVECO_SDK_HOME=<DevEco>/Contents/sdk \
+<DevEco>/Contents/tools/hvigor/bin/hvigorw assembleHap --no-daemon
+```
+
+- 产物 `entry/build/default/outputs/default/entry-default-unsigned.hap`（**未签名**，
+  装机需在 DevEco 里配置自动签名）。
+- 提交前仍须人工核对：`module.json5` 权限声明、`oh-package.json5` 依赖、
+  ArkTS 语法（不允许 `any`、不允许**无类型对象字面量**、不允许动态属性访问）。
 
 **协议改动**：两端都要改，且必须提供一段 curl 复现（写进 PR/提交说明）。
 
@@ -99,7 +107,7 @@ npm run dev            # 启动后 curl /im/health 探活
 
 | 项 | 说明 |
 |---|---|
-| 鸿蒙工程实编 | `app/` 已补上 AppScope 等硬阻塞项，但**仍未在 DevEco 里真正编译过** —— 必须有人执行 `hvigorw assembleHap` 才能宣称「可运行」 |
+| ~~鸿蒙工程实编~~ | ✅ v0.2.1 已在 DevEco Studio 26.0.0 下 `hvigorw assembleHap` 通过（未签名 HAP）；**签名 + 真机安装**仍需在 DevEco 里登录华为账号完成 |
 | ScanKit 权限 | 默认扫码 UI 通常不需要相机权限；若某 SDK 版本报权限错误，在 `module.json5` 加 `ohos.permission.CAMERA` |
 | 命名债务 | DB 列 `wechat_user_id`、`channel` 默认 `'wechat'`、SOUL DB 文件名 `wx_bot_*.db` 保留上游命名 |
 | 真实 key 端到端 | 全链路必须用真实 LLM + SiliconFlow key；无 key 时用 `npm run mock` + `npm run dev:verify` |

@@ -28,16 +28,25 @@ export class AppConfig {
     if (AppConfig.store !== null) {
       return;
     }
-    AppConfig.store = preferences.getPreferencesSync(context, { name: STORE_NAME });
+    try {
+      AppConfig.store = preferences.getPreferencesSync(context, { name: STORE_NAME });
+    } catch (e) {
+      console.warn('[AppConfig] 初始化 preferences 失败：' + (e as Error).message);
+      AppConfig.store = null;
+    }
   }
 
   private static getString(key: string, fallback: string): string {
     if (AppConfig.store === null) {
       return fallback;
     }
-    const v = AppConfig.store.getSync(key, fallback);
-    if (typeof v === 'string') {
-      return v as string;
+    try {
+      const v = AppConfig.store.getSync(key, fallback);
+      if (typeof v === 'string') {
+        return v as string;
+      }
+    } catch (e) {
+      console.warn('[AppConfig] 读取 ' + key + ' 失败：' + (e as Error).message);
     }
     return fallback;
   }
@@ -46,8 +55,12 @@ export class AppConfig {
     if (AppConfig.store === null) {
       return;
     }
-    AppConfig.store.putSync(key, value);
-    AppConfig.store.flush();
+    try {
+      AppConfig.store.putSync(key, value);
+      AppConfig.store.flush();
+    } catch (e) {
+      console.warn('[AppConfig] 写入 ' + key + ' 失败：' + (e as Error).message);
+    }
   }
 
   static baseUrl(): string {

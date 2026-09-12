@@ -1,7 +1,8 @@
 # im 鸿蒙客户端
 
 > HarmonyOS NEXT / Stage 模型 / ArkTS。
-> **本工程当前未在 DevEco Studio 中编译验证过**（开发机无 SDK），首次打开请按下面步骤自检。
+> **本工程已在 DevEco Studio 26.0.0 下实编通过**（`hvigorw assembleHap`，产出未签名 HAP）。
+> 首次打开若报 `compatibleSdkVersion` 不匹配，按 §一.2 改成本机 SDK 版本。
 
 ---
 
@@ -12,6 +13,25 @@
    改 `app/build-profile.json5` 里的 `compatibleSdkVersion` 为本机已安装的 SDK 版本。
 3. Run → 模拟器或真机。
 4. 首次启动会显示「连接 im 服务端」面板，填入地址与 token（见下一节）。
+
+### 命令行编译（不开 IDE，可选）
+
+```bash
+cd im/app
+export JAVA_HOME=/Applications/DevEco-Studio.app/Contents/jbr/Contents/Home   # 打包工具需要 JDK
+export PATH="$JAVA_HOME/bin:$PATH"
+NODE_HOME=/Applications/DevEco-Studio.app/Contents/tools/node \
+DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk \
+/Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw assembleHap --no-daemon
+```
+
+产物：`entry/build/default/outputs/default/entry-default-unsigned.hap`（**未签名**，
+装机要在 DevEco 里配自动签名后再 Run/Build）。
+
+> 两个只会在这条路上遇到的坑：
+> - 缺 `hvigor/hvigor-config.json5` → hvigor 报 `00304004 Not Found`（本仓库已补上该文件）。
+> - 本机 `java` 不可用（`Unable to locate a Java Runtime`）→ `PackageHap` 阶段报
+>   `00308018 Unknown Error / Tools execution failed.`；按上面的 `JAVA_HOME` 指向 DevEco 自带 JBR 即可。
 
 ---
 

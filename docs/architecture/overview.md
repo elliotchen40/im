@@ -108,7 +108,7 @@
 | **扫码配对** `/im/pair`：正确码 | ✅ 200 → `{baseUrl, token, userId}` |
 | 扫码配对：重复 / 过期 / 限次 / 无配对 / 错码 / 缺参 | ✅ 403 `used` / `expired` / `too_many_attempts` / `no_pairing` / `bad_code`；400 `missing code` |
 | 配对**未**放宽受保护端点（`/im/sync` 无 Bearer） | ✅ 401 |
-| 鸿蒙 `hvigorw assembleHap` | ❌ 未执行（本机无 DevEco Studio / HarmonyOS SDK） |
+| 鸿蒙 `hvigorw assembleHap` | ✅ 通过（v0.2.1 在装有 DevEco Studio 26.0.0 的 Mac 上实编，见 `versions.md`） |
 
 ### 验证中发现并修复的真实缺陷
 

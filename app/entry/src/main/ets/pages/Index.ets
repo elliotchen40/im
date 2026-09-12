@@ -13,7 +13,6 @@
  */
 
 import { common } from '@kit.AbilityKit';
-import { promptAction } from '@kit.ArkUI';
 import { AppConfig } from '../services/AppConfig';
 import { ImClient, SendResp, SyncMsg, SyncResp, newClientMsgId } from '../services/ImClient';
 import { PairPayload, PairResult, pairWithServer, parsePairPayload, scanOnce } from '../services/Pairing';
@@ -36,7 +35,12 @@ struct Index {
   private scroller: Scroller = new Scroller();
 
   aboutToAppear(): void {
-    const ctx = getContext(this) as common.UIAbilityContext;
+    // getContext() 已废弃，改用 UIContext 拿宿主 Context
+    const ctx: common.Context | undefined = this.getUIContext().getHostContext();
+    if (ctx === undefined) {
+      this.status = '初始化失败：拿不到应用上下文';
+      return;
+    }
     AppConfig.init(ctx);
     this.cfgBaseUrl = AppConfig.baseUrl();
     this.cfgToken = AppConfig.token();
@@ -131,11 +135,15 @@ struct Index {
     if (this.pairing) {
       return;
     }
-    const ctx = getContext(this) as common.UIAbilityContext;
+    const ctx: common.Context | undefined = this.getUIContext().getHostContext();
+    if (ctx === undefined) {
+      this.pairMsg = '拿不到应用上下文，无法扫码';
+      return;
+    }
     this.pairing = true;
     this.pairMsg = '正在打开扫码…';
 
-    const text: string | null = await scanOnce(ctx);
+    const text: string | null = await scanOnce(ctx as common.UIAbilityContext);
     if (text === null) {
       this.pairing = false;
       this.pairMsg = '已取消扫码';
@@ -229,7 +237,11 @@ struct Index {
   }
 
   private toast(text: string): void {
-    promptAction.showToast({ message: text, duration: 2000 });
+    try {
+      this.getUIContext().getPromptAction().showToast({ message: text, duration: 2000 });
+    } catch (e) {
+      console.warn('[Index] 弹提示失败：' + (e as Error).message);
+    }
   }
 
   private bubbleColor(m: ChatMessage): Resource {

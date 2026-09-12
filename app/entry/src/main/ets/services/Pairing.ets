@@ -27,6 +27,11 @@ export interface PairResult {
   message: string;
 }
 
+/** /im/pair 请求体（ArkTS 不允许无类型对象字面量，必须显式声明 interface） */
+interface PairBody {
+  code: string;
+}
+
 /** 服务端 /im/pair 响应 */
 interface PairResp {
   ret: number;
@@ -100,7 +105,7 @@ export async function pairWithServer(publicUrl: string, code: string): Promise<P
     base = base.substring(0, base.length - 1);
   }
 
-  const body: Record<string, string> = { code: code };
+  const body: PairBody = { code: code };
   const client = http.createHttp();
   try {
     const options: http.HttpRequestOptions = {

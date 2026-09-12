@@ -300,8 +300,11 @@ journalctl -u im-server | grep "care tick"
 
 ## 你需要在 Mac 上确认的两件事
 
-1. **app 从未真正编译过** —— 开发环境没有 DevEco/SDK,我只做到"工程结构完整 + 按 ArkTS
-   约束写代码"。第一次 Run 时若有编译错误,贴给我即可,应该是小修。
+1. **app 已实编通过**(DevEco Studio 26.0.0 / hvigor 6.26.4,`hvigorw assembleHap` ✅)。
+   实测唯一的编译阻塞是 `Pairing.ets` 里的 `Record<string, string>` 对象字面量
+   (ArkTS 不允许无类型对象字面量,已改为显式 `interface PairBody`)。
+   还剩 10 条 WARN(`getContext`/`showToast` deprecated、"may throw exceptions"),
+   不影响构建。
 2. **ScanKit 的相机权限** —— 默认扫码 UI 由系统提供,通常不需要声明权限;
    若你的 SDK 版本报错,在 `module.json5` 加 `ohos.permission.CAMERA`。
 

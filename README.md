@@ -3,7 +3,7 @@
 > 用**鸿蒙 app** 取代微信作为聊天渠道，承接 `wx-robot-ilink` 的全部架构与能力。
 >
 > 状态：**v0.2** —— 服务端通过类型检查与端到端闭环验证（含重启保持）；
-> 鸿蒙工程已补全到可在 DevEco 直接打开编译（AppScope 等硬阻塞已修）；
+> 鸿蒙工程已在 DevEco 实编通过（`hvigorw assembleHap`，产出未签名 HAP）；
 > 支持**扫码登录**绑定；部署物（systemd + cloudflared 隧道）与文档就绪。
 >
 > **要动手部署？直接看 [docs/deploy/next-steps.md](docs/deploy/next-steps.md) —— 保姆级步骤清单。**
@@ -161,7 +161,7 @@ im 有意保持与上游**同构**，以便直接接管既有数据：
 | 落库 `users`/`sessions`/`dialogues` | ✅ 双写成对 |
 | 重启保持（cursor / outbox / session） | ✅ 通过（并修复 1 个启动期缺陷） |
 | 扫码配对 `/im/pair`（换 token / 一次性 / 过期 / 限次 / 未放宽鉴权） | ✅ 全部按预期 |
-| 鸿蒙 `hvigorw assembleHap` | ❌ 未执行（无 DevEco Studio / HarmonyOS SDK） |
+| 鸿蒙 `hvigorw assembleHap` | ✅ 通过（DevEco Studio 26.0.0 / hvigor 6.26.4 / SDK API 26，Mac 实编；产物 `entry-default-unsigned.hap`，**未签名**） |
 
 细节与缺陷记录见 [docs/architecture/overview.md §5](docs/architecture/overview.md) 与
 [docs/architecture/versions.md](docs/architecture/versions.md)。

@@ -101,7 +101,13 @@ export class ImClient {
         readTimeout: readTimeoutMs,
         expectDataType: http.HttpDataType.STRING
       };
-      const resp = await client.request(this.url(path), options);
+      let resp: http.HttpResponse;
+      try {
+        resp = await client.request(this.url(path), options);
+      } catch (e) {
+        // 网络/超时异常在这里收口，再抛回调用方（pollLoop 负责退避重试）
+        throw new Error('请求失败：' + (e as Error).message);
+      }
       if (resp.responseCode !== 200) {
         throw new Error('HTTP ' + resp.responseCode);
       }
