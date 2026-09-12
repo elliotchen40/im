@@ -1,0 +1,58 @@
+# ============================================================
+# im —— Cloudflare Tunnel（命名隧道）配置模板
+# ============================================================
+# 用途：无公网 IP 也能让手机通过 https:// 访问服务端。
+#
+# 一次性准备：
+#   1) 安装 cloudflared
+#        macOS:  brew install cloudflared
+#        Debian: 见 Cloudflare 官方 apt 源
+#   2) 登录并创建隧道
+#        cloudflared tunnel login
+#        cloudflared tunnel create im
+#        # 记下输出的 Tunnel ID，并会在 ~/.cloudflared/<TUNNEL_ID>.json 生成凭据
+#   3) 绑定域名（把 im.example.com 换成你自己的域名）
+#        cloudflared tunnel route dns im im.example.com
+#   4) 把本文件复制到 /etc/cloudflared/config.yml，替换两处 REPLACE_WITH_*
+#   5) 以服务方式常驻
+#        sudo cloudflared service install
+#        sudo systemctl enable --now cloudflared
+#
+# 服务端侧配合（server/.env）：
+#   IM_BIND_HOST=127.0.0.1     # 只监听本机，公网入口交给隧道
+#   IM_HTTP_PORT=8787
+# ============================================================
+
+tunnel: REPLACE_WITH_TUNNEL_ID
+credentials-file: /etc/cloudflared/REPLACE_WITH_TUNNEL_ID.json
+
+# 隧道自身的日志级别
+loglevel: info
+metrics: 127.0.0.1:20241
+
+ingress:
+  # 主入口：app 用这个域名
+  - hostname: im.example.com
+    service: http://127.0.0.1:8787
+    originRequest:
+      # 长轮询最长挂 35s（IM_LONG_POLL_TIMEOUT_MS），给足连接余量
+      connectTimeout: 30s
+      tlsTimeout: 10s
+      # 保持到源站的空闲连接，减少每次长轮询的握手开销
+      keepAliveTimeout: 90s
+      keepAliveConnections: 8
+      # 不要分块编码：长轮询靠"挂起后才返回"，缓冲会引入额外延迟
+      disableChunkedEncoding: false
+      # 源站是明文 http（本机 127.0.0.1），隧道到边缘这一段仍是 https
+      noTLSVerify: false
+
+  # 其余请求一律 404（避免 Cloudflare 默认行为暴露别的东西）
+  - service: http_status:404
+
+# ---- 重要提醒 ----
+# 1) 不要给这个域名开 Cloudflare Access：它默认要求浏览器登录，
+#    而 app 只发 Authorization: Bearer <IM_APP_TOKEN>，会被挡在门外。
+#    个人自用靠 token 即可（隧道已隐藏源站）。
+# 2) 免费版对"源站静默"有约 100s 的硬超时（返回 524）。
+#    我们的长轮询是 35s，安全；但不要把 IM_LONG_POLL_TIMEOUT_MS 调到 ≥100s。
+# 3) 传输链路：手机 --https--> Cloudflare 边缘 --隧道--> cloudflared --http--> 127.0.0.1:8787

@@ -1,0 +1,9 @@
+{
+  "name": "entry",
+  "version": "0.1.0",
+  "description": "im 主模块（聊天界面 + 协议客户端）",
+  "main": "",
+  "author": "",
+  "license": "MIT",
+  "dependencies": {}
+}

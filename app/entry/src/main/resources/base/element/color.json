@@ -1,0 +1,36 @@
+{
+  "color": [
+    {
+      "name": "start_window_background",
+      "value": "#FFFFFF"
+    },
+    {
+      "name": "chat_bg",
+      "value": "#F2F3F5"
+    },
+    {
+      "name": "bubble_me",
+      "value": "#1AAD19"
+    },
+    {
+      "name": "bubble_other",
+      "value": "#FFFFFF"
+    },
+    {
+      "name": "bubble_proactive",
+      "value": "#FFF7E6"
+    },
+    {
+      "name": "text_primary",
+      "value": "#1A1A1A"
+    },
+    {
+      "name": "text_on_me",
+      "value": "#FFFFFF"
+    },
+    {
+      "name": "text_secondary",
+      "value": "#8A8A8A"
+    }
+  ]
+}

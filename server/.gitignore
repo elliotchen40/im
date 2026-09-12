@@ -1,0 +1,25 @@
+# im 服务端 —— 忽略规则
+# 与上游 wx-robot-ilink 的排除意图一致：密钥、运行时数据、依赖一律不入库。
+
+node_modules/
+dist/
+
+# ---- 密钥与本地配置（绝不入库）----
+.env
+.env.local
+.env.*.local
+
+# 验证专用配置（只含 mock key，本可提交；但避免误当成生产配置，默认忽略）
+.env.verify
+
+# ---- 运行时数据：SQLite、同步游标、渠道 inbox/outbox ----
+data/
+
+# ---- 备份与临时产物（上游经验：*.bak 常含真实 API key）----
+*.bak
+*.bak.*
+*.upstream.bak
+*.template.bak
+
+# ---- TS 增量构建信息 ----
+*.tsbuildinfo

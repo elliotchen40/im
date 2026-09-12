@@ -1,0 +1,52 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "im 主模块"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "im 聊天客户端"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "im"
+    },
+    {
+      "name": "reason_internet",
+      "value": "与 im 服务端建立长连接，收发消息"
+    },
+    {
+      "name": "reason_network_info",
+      "value": "判断网络可用性，决定是否发起长轮询"
+    },
+    {
+      "name": "app_title",
+      "value": "im"
+    },
+    {
+      "name": "input_placeholder",
+      "value": "说点什么…"
+    },
+    {
+      "name": "send",
+      "value": "发送"
+    },
+    {
+      "name": "status_connecting",
+      "value": "连接中…"
+    },
+    {
+      "name": "status_online",
+      "value": "已连接"
+    },
+    {
+      "name": "status_offline",
+      "value": "连接断开，重试中…"
+    },
+    {
+      "name": "proactive_badge",
+      "value": "主动关心"
+    }
+  ]
+}

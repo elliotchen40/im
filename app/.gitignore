@@ -1,0 +1,16 @@
+# im 鸿蒙客户端 —— 忽略规则（DevEco Studio 标准）
+/node_modules
+/oh_modules
+/oh-package-lock.json5
+/local.properties
+/.idea
+**/build
+/.hvigor
+/.cxx
+/.clangd
+/.clang-format
+/.clang-tidy
+**/.test
+/oh_modules
+*.iml
+.DS_Store

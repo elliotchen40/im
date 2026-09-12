@@ -1,0 +1,59 @@
+# ============================================================
+# im server —— systemd 服务单元
+# ============================================================
+# 安装（在服务器上，需 root）：
+#   1) 建专用用户：sudo useradd -r -s /usr/sbin/nologin im
+#   2) 部署代码：sudo mkdir -p /opt/im && sudo cp -r server /opt/im/ && cd /opt/im/server
+#   3) 安装依赖并编译：sudo -u im npm ci && sudo -u im npm run build
+#   4) 配置：sudo -u im cp .env.example .env && sudo -u im vi .env   # 填 IM_APP_TOKEN / 模型 key / SILICONFLOW_API_KEY
+#   5) 数据目录归属：sudo chown -R im:im /opt/im/server/data
+#   6) 安装本单元：
+#        sudo cp /opt/im/server/deploy/im-server.service /etc/systemd/system/
+#        sudo systemctl daemon-reload
+#        sudo systemctl enable --now im-server
+#   7) 查看：systemctl status im-server ; journalctl -u im-server -f
+#
+# 说明：
+#   - 用 `node --env-file=.env dist/index.js` 而不是 npm，避免 systemd 下 npm 路径与环境问题
+#   - 不配 EnvironmentFile：node 的 --env-file 已加载 .env，重复加载反而易踩引号/空格解析差异
+#   - 服务端会自己处理 SIGTERM（flush summarizer → 关渠道 → 关 DB），所以给足 KillSignal 时间
+# ============================================================
+
+[Unit]
+Description=im server (self-hosted AI chat backend)
+Documentation=file:///opt/im/DEPLOY.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=im
+Group=im
+WorkingDirectory=/opt/im/server
+
+# 加载 .env 并启动（.env 里含 IM_APP_TOKEN 等，权限应为 600）
+ExecStart=/usr/bin/node --env-file=.env dist/index.js
+
+# 崩溃自愈
+Restart=always
+RestartSec=5s
+
+# 优雅退出：index.ts 里 SIGTERM 会 flush summarizer + 关渠道 + 关 DB
+KillSignal=SIGTERM
+TimeoutStopSec=30s
+
+# 日志进 journald：journalctl -u im-server -f
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=im-server
+
+# 安全加固（服务端只需读代码 + 写 data/ + 出网访问 LLM）
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/im/server/data
+# 允许真正生效：ProtectSystem=strict 下仍可写 data/
+
+[Install]
+WantedBy=multi-user.target

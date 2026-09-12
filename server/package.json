@@ -1,0 +1,33 @@
+{
+  "name": "im-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "im 项目服务端 —— 承接 wx-robot-ilink 的 AI 对话/记忆/SOUL/主动关怀架构，渠道层由微信 iLink 换为自研 IM 协议",
+  "scripts": {
+    "dev": "tsx --env-file=.env src/index.ts",
+    "build": "tsc",
+    "start": "node --env-file=.env dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "pair": "tsx src/pair/pair_cli.ts",
+    "check:imports": "node scripts/check_imports.mjs src",
+    "mock": "node scripts/mock_provider.mjs",
+    "dev:verify": "tsx --env-file=.env.verify src/index.ts",
+    "verify": "bash scripts/verify.sh"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "better-sqlite3": "^13.0.3",
+    "openai": "^4.85.0",
+    "qrcode-terminal": "^0.12.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/qrcode-terminal": "^0.12.2",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0"
+  }
+}

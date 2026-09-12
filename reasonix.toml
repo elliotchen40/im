@@ -1,0 +1,35 @@
+# ============================================================
+# im 项目 —— Reasonix 本地配置
+# ============================================================
+# 作用：把本项目的常用验证命令显式加入允许列表，避免每次交互都弹权限询问。
+# 参考上游 wx-robot-ilink/reasonix.toml 的做法（它同样用 allow 列表声明 Bash 命令）。
+#
+# 注意：本文件解决的是「权限询问」，不是 agent 的写入安全守卫
+# （`[evidence required] … read-evidence requirement is outstanding`）。
+# 后者与工具调用的「能否声明写入路径」有关，见 docs/architecture/overview.md §5。
+# ============================================================
+
+[permissions]
+# 只读诊断 + 验证链路的命令（本项目日常需要）
+allow = [
+  "Bash(npm install:*)",
+  "Bash(npm run typecheck:*)",
+  "Bash(npm run check:imports:*)",
+  "Bash(npm run mock:*)",
+  "Bash(npm run dev:verify:*)",
+  "Bash(npm run verify:*)",
+  "Bash(npx tsc:*)",
+  "Bash(node scripts/:*)",
+  "Bash(bash scripts/:*)",
+  "Bash(curl -fsS http://127.0.0.1:8787/*)",
+]
+
+# 危险操作硬拦（无论何种模式）
+deny = [
+  "Bash(rm -rf /*)",
+  "Bash(git push --force*)",
+]
+
+[sandbox]
+# mock provider / 验证脚本需要写临时日志
+allow_write = ["/tmp"]

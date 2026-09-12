@@ -1,0 +1,10 @@
+{
+  "modelVersion": "5.0.0",
+  "name": "im",
+  "version": "0.1.0",
+  "description": "im —— 取代微信的自研聊天客户端（鸿蒙 / ArkTS）",
+  "main": "",
+  "author": "",
+  "license": "MIT",
+  "dependencies": {}
+}
