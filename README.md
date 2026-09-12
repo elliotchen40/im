@@ -161,7 +161,7 @@ im 有意保持与上游**同构**，以便直接接管既有数据：
 | 落库 `users`/`sessions`/`dialogues` | ✅ 双写成对 |
 | 重启保持（cursor / outbox / session） | ✅ 通过（并修复 1 个启动期缺陷） |
 | 扫码配对 `/im/pair`（换 token / 一次性 / 过期 / 限次 / 未放宽鉴权） | ✅ 全部按预期 |
-| 鸿蒙 `hvigorw assembleHap` | ✅ 通过（DevEco Studio 26.0.0 / hvigor 6.26.4 / SDK API 26，Mac 实编；产物 `entry-default-unsigned.hap`，**未签名**） |
+| 鸿蒙 `hvigorw assembleHap` | ✅ 通过（DevEco Studio 26.0.0 / hvigor 6.26.4 / SDK API 26，Mac 实编；产物 `entry-default-signed.hap`，已配自动签名） |
 
 细节与缺陷记录见 [docs/architecture/overview.md §5](docs/architecture/overview.md) 与
 [docs/architecture/versions.md](docs/architecture/versions.md)。

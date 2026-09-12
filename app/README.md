@@ -25,13 +25,18 @@ DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk \
 /Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw assembleHap --no-daemon
 ```
 
-产物：`entry/build/default/outputs/default/entry-default-unsigned.hap`（**未签名**，
-装机要在 DevEco 里配自动签名后再 Run/Build）。
+产物：`entry/build/default/outputs/default/entry-default-signed.hap`（已签名，可直接装）。
 
-> 两个只会在这条路上遇到的坑：
+> 出签名包的前提：`app/build-profile.json5` 的 `products[0]` 里绑定了
+> `"signingConfig": "default"`。DevEco 的「自动签名」**只写 `signingConfigs` 数组、不写这个引用**，
+> 缺失时构建只会产出 `entry-default-unsigned.hap`，安装报 **`9568320 no signature file.`**。
+> 签名配置已随仓库入库（含本机 `~/.ohos` 路径），换机器 clone 后要重新配一次。
+
+> 三个只会在这条路上遇到的坑：
 > - 缺 `hvigor/hvigor-config.json5` → hvigor 报 `00304004 Not Found`（本仓库已补上该文件）。
 > - 本机 `java` 不可用（`Unable to locate a Java Runtime`）→ `PackageHap` 阶段报
 >   `00308018 Unknown Error / Tools execution failed.`；按上面的 `JAVA_HOME` 指向 DevEco 自带 JBR 即可。
+> - 装包报 `9568320 no signature file.` → product 没绑 `signingConfig`，见上一段。
 
 ---
 

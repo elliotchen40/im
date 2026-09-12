@@ -71,8 +71,9 @@ NODE_HOME=<DevEco>/Contents/tools/node DEVECO_SDK_HOME=<DevEco>/Contents/sdk \
 <DevEco>/Contents/tools/hvigor/bin/hvigorw assembleHap --no-daemon
 ```
 
-- 产物 `entry/build/default/outputs/default/entry-default-unsigned.hap`（**未签名**，
-  装机需在 DevEco 里配置自动签名）。
+- 产物 `entry/build/default/outputs/default/entry-default-signed.hap`（已自动签名，可直接装）。
+  签名配置在 `app/build-profile.json5`（已入库，含本机 `~/.ohos` 证书路径），
+  **换机器 clone 后必须在 DevEco 里重新配一次签名**。
 - 提交前仍须人工核对：`module.json5` 权限声明、`oh-package.json5` 依赖、
   ArkTS 语法（不允许 `any`、不允许**无类型对象字面量**、不允许动态属性访问）。
 

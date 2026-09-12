@@ -1,16 +1,35 @@
 {
   "app": {
-    "signingConfigs": [],
+    "signingConfigs": [
+      {
+        "name": "default",
+        "type": "HarmonyOS",
+        "material": {
+          "certpath": "/Users/elliot/.ohos/config/default_app_U-VTuaPrVBdIHii5-nFT5n6TMPF6tv-9ui4EX46JBsw=.cer",
+          "keyAlias": "debugKey",
+          "keyPassword": "0000001B4AFF7A7F415770B352C18779D640088E65C9024988EFA5F79A52281BD9923DBBC063FA200AC990",
+          "profile": "/Users/elliot/.ohos/config/default_app_U-VTuaPrVBdIHii5-nFT5n6TMPF6tv-9ui4EX46JBsw=.p7b",
+          "signAlg": "SHA256withECDSA",
+          "storeFile": "/Users/elliot/.ohos/config/default_app_U-VTuaPrVBdIHii5-nFT5n6TMPF6tv-9ui4EX46JBsw=.p12",
+          "storePassword": "0000001BE60E68C04AD7FFB8AA1D0A860506041ED1902917FFF29DFD734A41E6356112A4EAFF9F8ECE7BE6"
+        }
+      }
+    ],
     "products": [
       {
         "name": "default",
+        "signingConfig": "default",
         "compatibleSdkVersion": "5.0.0(12)",
         "runtimeOS": "HarmonyOS"
       }
     ],
     "buildModeSet": [
-      { "name": "debug" },
-      { "name": "release" }
+      {
+        "name": "debug"
+      },
+      {
+        "name": "release"
+      }
     ]
   },
   "modules": [
@@ -20,7 +39,9 @@
       "targets": [
         {
           "name": "default",
-          "applyToProducts": ["default"]
+          "applyToProducts": [
+            "default"
+          ]
         }
       ]
     }
