@@ -1,12 +1,10 @@
 /**
  * 本地配置与状态持久化（preferences）。
  *
- * 存两类东西：
+ * 存三类东西：
  *   1) 服务端地址 + IM_APP_TOKEN —— 首次启动需在设置页填入
  *   2) sync cursor —— 长轮询游标，冷启动恢复后即可补齐离线期间的消息
- *      （见 docs/protocol/im-protocol.md §6 第 3 条）
- *
- * 用 preferences 的同步 API，避免页面首帧拿不到 cursor 而重复同步历史。
+ *   3) 个人资料 + 聊天背景 —— 显示名、头像路径、背景图路径
  */
 
 import { preferences } from '@kit.ArkData';
@@ -16,8 +14,10 @@ const STORE_NAME: string = 'im_config';
 const KEY_BASE_URL: string = 'base_url';
 const KEY_TOKEN: string = 'app_token';
 const KEY_CURSOR: string = 'sync_cursor';
+const KEY_DISPLAY_NAME: string = 'display_name';
+const KEY_AVATAR_PATH: string = 'avatar_path';
+const KEY_CHAT_BG_PATH: string = 'chat_bg_path';
 
-/** 默认服务端地址；真机调试请改为局域网 IP / 域名（生产必须 https） */
 const DEFAULT_BASE_URL: string = 'http://127.0.0.1:8081';
 const DEFAULT_TOKEN: string = '';
 
@@ -87,8 +87,36 @@ export class AppConfig {
     AppConfig.setString(KEY_CURSOR, value);
   }
 
-  /** 已配置且可用（地址与 token 都非空） */
   static isConfigured(): boolean {
     return AppConfig.baseUrl().length > 0 && AppConfig.token().length > 0;
+  }
+
+  // -------------------- 个人资料 / 聊天背景 --------------------
+
+  /** 显示名（顶栏、设置里能看到；空字符串表示使用 APP_NAME） */
+  static displayName(): string {
+    return AppConfig.getString(KEY_DISPLAY_NAME, '');
+  }
+
+  static setDisplayName(value: string): void {
+    AppConfig.setString(KEY_DISPLAY_NAME, value);
+  }
+
+  /** 用户头像绝对路径（空字符串表示未设置） */
+  static avatarPath(): string {
+    return AppConfig.getString(KEY_AVATAR_PATH, '');
+  }
+
+  static setAvatarPath(value: string): void {
+    AppConfig.setString(KEY_AVATAR_PATH, value);
+  }
+
+  /** 聊天背景图绝对路径（空字符串表示纯色背景） */
+  static chatBgPath(): string {
+    return AppConfig.getString(KEY_CHAT_BG_PATH, '');
+  }
+
+  static setChatBgPath(value: string): void {
+    AppConfig.setString(KEY_CHAT_BG_PATH, value);
   }
 }

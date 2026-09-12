@@ -1,22 +1,25 @@
 /**
- * im 聊天页 —— 唯一的页面，包含三块：
- *   1) 顶部状态栏（连接状态 + 重新配对入口）
- *   2) 消息列表（我发的气泡 / 机器人回复 / 主动关怀）
- *   3) 底部输入栏
+ * Glimmer 聊天页 —— 唯一的页面，包含四块：
+ *   1) 顶栏（动态避让状态栏）：左侧 Glimmer 名称（可点击改名 + 改头像）+ 右侧状态/重新配对
+ *   2) 消息列表：气泡（用户气泡不显示头像，对方/AI 气泡显示机器人头像）+ 可选背景图
+ *   3) 底部输入栏：「+」号 sheet（图片 / 文件）+ 输入框 + 发送
+ *   4) 顶栏 / 设置面板：名称、头像、聊天背景图三件套编辑入口
  *
- * 首次使用走「连接 im 服务端」面板：**扫码登录**是主路径 ——
- * 服务器上跑 `npm run pair`，扫终端里的二维码即自动填好地址与 token。
- * 手填地址 + token 作为备选（服务端 token 在 .env 的 IM_APP_TOKEN）。
- *
- * 长轮询循环见 pollLoop()：拿到响应就更新 cursor 并立即再发，不 sleep ——
+ * 长轮询循环见 pollLoop()：拿到响应就更新 cursor 并立即再发，不 sleep —
  * 服务端在无消息时会挂起至多 IM_LONG_POLL_TIMEOUT_MS，sleep 只会徒增延迟。
  */
 
 import { common } from '@kit.AbilityKit';
+import { window } from '@kit.ArkUI';
 import { AppConfig } from '../services/AppConfig';
+import { PhotoService } from '../services/PhotoService';
 import { ImClient, SendResp, SyncMsg, SyncResp, newClientMsgId } from '../services/ImClient';
 import { PairPayload, PairResult, pairWithServer, parsePairPayload, scanOnce } from '../services/Pairing';
 import { ChatMessage, MessageKind } from '../model/Message';
+
+const APP_DISPLAY_NAME: string = 'Glimmer';
+const STATUSBAR_FALLBACK: number = 28; // vp, 兜底值
+const ROBOT_INITIAL: string = 'G';     // 机器人头像占位字符
 
 @Entry
 @Component
@@ -29,22 +32,45 @@ struct Index {
   @State cfgToken: string = '';
   @State pairing: boolean = false;
   @State pairMsg: string = '';
+  @State statusBarHeight: number = STATUSBAR_FALLBACK;
+
+  // 个人资料 + 聊天背景
+  @State displayName: string = APP_DISPLAY_NAME;
+  @State avatarPath: string = '';
+  @State chatBgPath: string = '';
+  @State bgVersion: number = 0; // 切换背景图时 bump 一次强制 @State 重渲染
+
+  // 名称编辑面板
+  @State profileDialogOpen: boolean = false;
+  @State profileNameDraft: string = '';
+
+  // + 号附件面板
+  @State attachSheetOpen: boolean = false;
+
   private client: ImClient | null = null;
   private cursor: string = '';
   private running: boolean = false;
   private scroller: Scroller = new Scroller();
 
   aboutToAppear(): void {
-    // getContext() 已废弃，改用 UIContext 拿宿主 Context
     const ctx: common.Context | undefined = this.getUIContext().getHostContext();
     if (ctx === undefined) {
       this.status = '初始化失败：拿不到应用上下文';
       return;
     }
     AppConfig.init(ctx);
+
+    // 读历史值（地址/token/profile/背景）
     this.cfgBaseUrl = AppConfig.baseUrl();
     this.cfgToken = AppConfig.token();
     this.configured = AppConfig.isConfigured();
+    this.displayName = AppConfig.displayName().length > 0 ? AppConfig.displayName() : APP_DISPLAY_NAME;
+    this.avatarPath = AppConfig.avatarPath();
+    this.chatBgPath = AppConfig.chatBgPath();
+
+    // 动态拿状态栏高度（任何挖孔/灵动岛/居中摄像头机型都正确避让）
+    void this.refreshStatusBarHeight(ctx as common.UIAbilityContext);
+
     if (this.configured) {
       this.startSession();
     } else {
@@ -60,7 +86,6 @@ struct Index {
 
   private startSession(): void {
     this.client = new ImClient(AppConfig.baseUrl(), AppConfig.token());
-    // 冷启动恢复游标 → 补齐离线期间的消息
     this.cursor = AppConfig.cursor();
     this.running = true;
     this.pollLoop();
@@ -101,7 +126,6 @@ struct Index {
   }
 
   private onServerMessage(m: SyncMsg): void {
-    // 收到任意回复即认为此前的乐观消息已送达
     this.settleOldestPending();
     this.messages.push(new ChatMessage(m.serverMsgId, m.text, false, m.kind, m.ts));
   }
@@ -153,7 +177,7 @@ struct Index {
     const payload: PairPayload | null = parsePairPayload(text);
     if (payload === null) {
       this.pairing = false;
-      this.pairMsg = '这不是 im 的配对二维码（应形如 im://pair?u=…&c=…）';
+      this.pairMsg = '这不是 Glimmer 的配对二维码（应形如 im://pair?u=…&c=…）';
       return;
     }
 
@@ -163,7 +187,6 @@ struct Index {
     this.pairMsg = res.message;
 
     if (res.ok) {
-      // 配对成功：地址与 token 已落盘，直接进聊天
       this.cfgBaseUrl = AppConfig.baseUrl();
       this.cfgToken = AppConfig.token();
       this.configured = true;
@@ -222,6 +245,93 @@ struct Index {
     this.status = '尚未绑定服务端';
   }
 
+  // --------------------------------------------------------- 个人资料 / 背景
+
+  private openProfileDialog(): void {
+    this.profileNameDraft = this.displayName === APP_DISPLAY_NAME ? '' : this.displayName;
+    this.profileDialogOpen = true;
+  }
+
+  private async onPickAvatar(): Promise<void> {
+    const ctx: common.Context | undefined = this.getUIContext().getHostContext();
+    if (ctx === undefined) {
+      this.toast('拿不到应用上下文');
+      return;
+    }
+    const r = await PhotoService.pickAndCache(ctx, 'avatar');
+    if (r.error.length > 0 && r.path.length === 0) {
+      if (r.error !== '用户取消选择') {
+        this.toast('选头像失败：' + r.error);
+      }
+      return;
+    }
+    const old = this.avatarPath;
+    PhotoService.tryDelete(old);
+    AppConfig.setAvatarPath(r.path);
+    this.avatarPath = r.path;
+  }
+
+  private async onPickChatBg(): Promise<void> {
+    const ctx: common.Context | undefined = this.getUIContext().getHostContext();
+    if (ctx === undefined) {
+      this.toast('拿不到应用上下文');
+      return;
+    }
+    const r = await PhotoService.pickAndCache(ctx, 'chatbg');
+    if (r.error.length > 0 && r.path.length === 0) {
+      if (r.error !== '用户取消选择') {
+        this.toast('选背景失败：' + r.error);
+      }
+      return;
+    }
+    const old = this.chatBgPath;
+    PhotoService.tryDelete(old);
+    AppConfig.setChatBgPath(r.path);
+    this.chatBgPath = r.path;
+    this.bgVersion++;
+  }
+
+  private onClearChatBg(): void {
+    const old = this.chatBgPath;
+    PhotoService.tryDelete(old);
+    AppConfig.setChatBgPath('');
+    this.chatBgPath = '';
+    this.bgVersion++;
+  }
+
+  private onSaveProfile(): void {
+    const v: string = this.profileNameDraft.trim();
+    this.displayName = v.length > 0 ? v : APP_DISPLAY_NAME;
+    AppConfig.setDisplayName(this.displayName === APP_DISPLAY_NAME ? '' : this.displayName);
+    this.profileDialogOpen = false;
+    this.toast('已保存');
+  }
+
+  private async onAttachImage(): Promise<void> {
+    this.attachSheetOpen = false;
+    const ctx: common.Context | undefined = this.getUIContext().getHostContext();
+    if (ctx === undefined) {
+      return;
+    }
+    const r = await PhotoService.pickAndCache(ctx, 'attach');
+    if (r.path.length === 0) {
+      if (r.error !== '用户取消选择') {
+        this.toast('选图失败：' + r.error);
+      }
+      return;
+    }
+    // 本地只把文件名写到输入框（完整图片发送需要服务端配合 base64
+    // 入站；本次只占位提示，未来版本对接）
+    const fname: string = r.path.split('/').pop() ?? '';
+    this.inputText = this.inputText + ' [图片:' + fname + ']';
+    this.toast('图片已附加：' + fname);
+  }
+
+  private async onAttachFile(): Promise<void> {
+    this.attachSheetOpen = false;
+    this.toast('文件选择尚未接入（占位）');
+  }
+
   // ------------------------------------------------------------------ 工具
 
   private scrollToBottom(): void {
@@ -236,6 +346,27 @@ struct Index {
     });
   }
 
+  /**
+   * 读系统状态栏区域高度（避开挖孔 / 灵动岛 / 居中摄像头机型），
+   * 异步获取 Window，再用 px2vp 转成 vp 单位。
+   */
+  private async refreshStatusBarHeight(uiCtx: common.UIAbilityContext): Promise<void> {
+    try {
+      const win: window.Window = await window.getLastWindow(uiCtx);
+      const avoid: window.AvoidArea = win.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM);
+      const topPx: number = avoid.topRect.height;
+      if (topPx > 0) {
+        let vp: number = px2vp(topPx);
+        if (vp < STATUSBAR_FALLBACK) {
+          vp = STATUSBAR_FALLBACK;
+        }
+        this.statusBarHeight = vp;
+      }
+    } catch (e) {
+      this.statusBarHeight = STATUSBAR_FALLBACK;
+    }
+  }
+
   private toast(text: string): void {
     try {
       this.getUIContext().getPromptAction().showToast({ message: text, duration: 2000 });
@@ -244,27 +375,43 @@ struct Index {
     }
   }
 
-  private bubbleColor(m: ChatMessage): Resource {
-    if (m.fromMe) {
-      return $r('app.color.bubble_me');
+  // ----------------------------------------------------------- 头像视图
+
+  @Builder
+  robotAvatar() {
+    if (this.avatarPath.length > 0) {
+      Image(this.avatarPath)
+        .width(36)
+        .height(36)
+        .borderRadius(18)
+        .objectFit(ImageFit.Cover)
+    } else {
+      // 占位头像：圆角方块 + 首字母
+      Column() {
+        Text(ROBOT_INITIAL)
+          .fontSize(18)
+          .fontColor(Color.White)
+          .fontWeight(FontWeight.Bold)
+      }
+      .width(36)
+      .height(36)
+      .borderRadius(18)
+      .backgroundColor('#1AAD19')
+      .justifyContent(FlexAlign.Center)
+      .alignItems(HorizontalAlign.Center)
     }
-    if (m.isProactive()) {
-      return $r('app.color.bubble_proactive');
-    }
-    return $r('app.color.bubble_other');
   }
 
-  private textColor(m: ChatMessage): Resource {
-    return m.fromMe ? $r('app.color.text_on_me') : $r('app.color.text_primary');
-  }
-
-  // -------------------------------------------------------------------- UI
+  // ----------------------------------------------------------- 气泡视图
 
   @Builder
   messageBubble(m: ChatMessage) {
     Row() {
       if (m.fromMe) {
         Blank()
+      } else {
+        this.robotAvatar()
+        Column().width(8)
       }
       Column() {
         if (m.isProactive()) {
@@ -275,11 +422,11 @@ struct Index {
         }
         Text(m.text)
           .fontSize(15)
-          .fontColor(this.textColor(m))
+          .fontColor(m.fromMe ? $r('app.color.text_on_me') : $r('app.color.text_primary'))
         if (m.pending) {
           Text('发送中…')
             .fontSize(10)
-            .fontColor($r('app.color.text_secondary'))
+            .fontColor(m.fromMe ? '#D0F0D0' : $r('app.color.text_secondary'))
             .margin({ top: 4 })
         } else if (m.failed) {
           Text('发送失败')
@@ -290,9 +437,11 @@ struct Index {
       }
       .alignItems(HorizontalAlign.Start)
       .padding(10)
-      .borderRadius(10)
-      .backgroundColor(this.bubbleColor(m))
-      .constraintSize({ maxWidth: '74%' })
+      .borderRadius(12)
+      .backgroundColor(m.fromMe ? $r('app.color.bubble_me')
+                       : (m.isProactive() ? $r('app.color.bubble_proactive')
+                                          : $r('app.color.bubble_other')))
+      .constraintSize({ maxWidth: '70%' })
       if (!m.fromMe) {
         Blank()
       }
@@ -301,10 +450,303 @@ struct Index {
     .padding({ left: 12, right: 12, top: 6, bottom: 6 })
   }
 
+  // ----------------------------------------------------------- 视图
+
+  build() {
+    Column() {
+      if (this.configured) {
+        this.chatPanel()
+      } else {
+        this.setupPanel()
+      }
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(this.chatBgPath.length > 0 ? Color.Transparent : $r('app.color.chat_bg'))
+  }
+
+  // ----------------------------------------------------------- 聊天主面板
+
+  @Builder
+  chatPanel() {
+    Column() {
+      // 顶部空白：动态避让状态栏 + 顶栏
+      Row().width('100%').height(this.statusBarHeight).backgroundColor(Color.White)
+
+      // 顶栏
+      Row() {
+        // 左侧：机器人头像 + 名称（点名称 = 打开编辑面板）
+        Row() {
+          this.robotAvatar()
+          Column().width(8)
+          Text(this.displayName)
+            .fontSize(18)
+            .fontWeight(FontWeight.Bold)
+            .fontColor($r('app.color.text_primary'))
+            .onClick(() => {
+              this.openProfileDialog();
+            })
+        }
+        .onClick(() => {
+          this.openProfileDialog();
+        })
+
+        Blank()
+
+        // 右侧：状态文字 + 重新配对
+        Text(this.status)
+          .fontSize(12)
+          .fontColor($r('app.color.text_secondary'))
+        Text('重新配对')
+          .fontSize(12)
+          .fontColor('#1AAD19')
+          .margin({ left: 12 })
+          .onClick(() => {
+            this.onRebind();
+          })
+      }
+      .width('100%')
+      .padding({ left: 16, right: 16, top: 10, bottom: 10 })
+      .backgroundColor(Color.White)
+      .alignItems(VerticalAlign.Center)
+
+      // 消息区（背景图叠加在 Column 上）
+      Stack() {
+        // 背景图
+        if (this.chatBgPath.length > 0) {
+          Image(this.chatBgPath)
+            .width('100%')
+            .height('100%')
+            .objectFit(ImageFit.Cover)
+            .opacity(0.85)
+        }
+        // 半透明遮罩，保证气泡文字可读
+        if (this.chatBgPath.length > 0) {
+          Column().width('100%').height('100%').backgroundColor('#00000020')
+        }
+
+        List({ scroller: this.scroller }) {
+          ForEach(this.messages, (m: ChatMessage) => {
+            ListItem() {
+              this.messageBubble(m)
+            }
+          }, (m: ChatMessage) => m.id)
+        }
+        .layoutWeight(1)
+        .width('100%')
+        .backgroundColor(Color.Transparent)
+      }
+      .layoutWeight(1)
+      .width('100%')
+
+      // 底部输入栏
+      Row() {
+        // + 号（弹出 sheet）
+        Text('+')
+          .fontSize(24)
+          .fontWeight(FontWeight.Bold)
+          .width(40)
+          .height(40)
+          .borderRadius(20)
+          .backgroundColor('#F2F3F5')
+          .textAlign(TextAlign.Center)
+          .margin({ right: 8 })
+          .onClick(() => {
+            this.attachSheetOpen = true;
+          })
+
+        TextInput({ text: this.inputText, placeholder: $r('app.string.input_placeholder') })
+          .layoutWeight(1)
+          .onChange((v: string) => {
+            this.inputText = v;
+          })
+          .onSubmit(() => {
+            this.onSend();
+          })
+
+        Button($r('app.string.send'))
+          .margin({ left: 8 })
+          .onClick(() => {
+            this.onSend();
+          })
+      }
+      .width('100%')
+      .padding(12)
+      .backgroundColor(Color.White)
+      .alignItems(VerticalAlign.Center)
+    }
+    .width('100%')
+    .height('100%')
+
+    // 个人资料编辑面板（绑在根 Column 上）
+    .bindSheet($$this.profileDialogOpen, this.profileDialogBuilder(), {
+      height: 460,
+      dragBar: true,
+      title: { title: '编辑个人资料' }
+    })
+
+    // + 号附件面板
+    .bindSheet($$this.attachSheetOpen, this.attachSheetBuilder(), {
+      height: 240,
+      dragBar: true,
+      title: { title: '添加附件' }
+    })
+  }
+
+  // -------------------------------------------------------- 个人资料 sheet
+
+  @Builder
+  profileDialogBuilder() {
+    Column() {
+      Row() {
+        // 当前头像
+        this.robotAvatar()
+        Column().width(12)
+        Column() {
+          Text(this.displayName)
+            .fontSize(18)
+            .fontWeight(FontWeight.Bold)
+            .fontColor($r('app.color.text_primary'))
+          Text('点击右侧按钮更换')
+            .fontSize(12)
+            .fontColor($r('app.color.text_secondary'))
+            .margin({ top: 4 })
+        }
+        .alignItems(HorizontalAlign.Start)
+        Blank()
+        Button('换头像')
+          .height(36)
+          .onClick(() => {
+            this.onPickAvatar();
+          })
+      }
+      .width('100%')
+      .padding({ left: 4, right: 4, top: 8, bottom: 16 })
+
+      Text('显示名')
+        .fontSize(12)
+        .fontColor($r('app.color.text_secondary'))
+        .width('100%')
+        .textAlign(TextAlign.Start)
+        .margin({ bottom: 6 })
+      TextInput({ text: this.profileNameDraft, placeholder: '留空则使用 Glimmer' })
+        .width('100%')
+        .onChange((v: string) => {
+          this.profileNameDraft = v;
+        })
+
+      Row().width('100%').height(20)
+
+      Text('聊天背景')
+        .fontSize(12)
+        .fontColor($r('app.color.text_secondary'))
+        .width('100%')
+        .textAlign(TextAlign.Start)
+        .margin({ bottom: 8 })
+
+      Row() {
+        Button('从相册选背景')
+          .layoutWeight(1)
+          .height(40)
+          .onClick(() => {
+            this.onPickChatBg();
+          })
+        Column().width(8)
+        Button('清除背景')
+          .layoutWeight(1)
+          .height(40)
+          .backgroundColor('#8A8A8A')
+          .onClick(() => {
+            this.onClearChatBg();
+          })
+      }
+      .width('100%')
+
+      Blank()
+
+      Row() {
+        Button('取消')
+          .layoutWeight(1)
+          .backgroundColor('#8A8A8A')
+          .onClick(() => {
+            this.profileDialogOpen = false;
+          })
+        Column().width(12)
+        Button('保存')
+          .layoutWeight(1)
+          .onClick(() => {
+            this.onSaveProfile();
+          })
+      }
+      .width('100%')
+    }
+    .width('100%')
+    .height('100%')
+    .padding(20)
+    .backgroundColor(Color.White)
+  }
+
+  // ---------------------------------------------------------- 附件 sheet
+
+  @Builder
+  attachSheetBuilder() {
+    Column() {
+      Row() {
+        Column() {
+          Text('🖼')
+            .fontSize(28)
+            .fontColor('#1AAD19')
+          Text('图片')
+            .fontSize(12)
+            .margin({ top: 6 })
+        }
+        .layoutWeight(1)
+        .height(80)
+        .justifyContent(FlexAlign.Center)
+        .alignItems(HorizontalAlign.Center)
+        .backgroundColor('#F2F3F5')
+        .borderRadius(8)
+        .onClick(() => {
+          this.onAttachImage();
+        })
+
+        Column().width(12)
+
+        Column() {
+          Text('📄')
+            .fontSize(28)
+            .fontColor('#1AAD19')
+          Text('文件')
+            .fontSize(12)
+            .margin({ top: 6 })
+        }
+        .layoutWeight(1)
+        .height(80)
+        .justifyContent(FlexAlign.Center)
+        .alignItems(HorizontalAlign.Center)
+        .backgroundColor('#F2F3F5')
+        .borderRadius(8)
+        .onClick(() => {
+          this.onAttachFile();
+        })
+      }
+      .width('100%')
+      .padding(16)
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(Color.White)
+  }
+
+  // ----------------------------------------------------------- 绑定面板
+
   @Builder
   setupPanel() {
     Column() {
-      Text('绑定 im 服务端')
+      // 顶部也避让状态栏，避免绑定面板里按钮顶到摄像头
+      Row().width('100%').height(this.statusBarHeight)
+
+      Text('绑定 Glimmer 服务端')
         .fontSize(20)
         .fontWeight(FontWeight.Bold)
         .margin({ bottom: 8 })
@@ -339,7 +781,7 @@ struct Index {
         .fontColor($r('app.color.text_secondary'))
         .margin({ bottom: 10 })
 
-      TextInput({ text: this.cfgBaseUrl, placeholder: 'https://im.example.com' })
+      TextInput({ text: this.cfgBaseUrl, placeholder: 'http://10.168.3.180:8081' })
         .type(InputType.Normal)
         .onChange((v: string) => {
           this.cfgBaseUrl = v;
@@ -365,74 +807,5 @@ struct Index {
     .padding(24)
     .justifyContent(FlexAlign.Center)
     .backgroundColor(Color.White)
-  }
-
-  @Builder
-  chatPanel() {
-    Column() {
-      Row() {
-        Text('im')
-          .fontSize(20)
-          .fontWeight(FontWeight.Bold)
-        Blank()
-        Text(this.status)
-          .fontSize(12)
-          .fontColor($r('app.color.text_secondary'))
-        Text('重新配对')
-          .fontSize(12)
-          .fontColor('#1AAD19')
-          .margin({ left: 12 })
-          .onClick(() => {
-            this.onRebind();
-          })
-      }
-      .width('100%')
-      .padding({ left: 16, right: 16, top: 12, bottom: 12 })
-      .backgroundColor(Color.White)
-
-      List({ scroller: this.scroller }) {
-        ForEach(this.messages, (m: ChatMessage) => {
-          ListItem() {
-            this.messageBubble(m)
-          }
-        }, (m: ChatMessage) => m.id)
-      }
-      .layoutWeight(1)
-      .width('100%')
-      .backgroundColor($r('app.color.chat_bg'))
-
-      Row() {
-        TextInput({ text: this.inputText, placeholder: $r('app.string.input_placeholder') })
-          .layoutWeight(1)
-          .onChange((v: string) => {
-            this.inputText = v;
-          })
-          .onSubmit(() => {
-            this.onSend();
-          })
-        Button($r('app.string.send'))
-          .margin({ left: 8 })
-          .onClick(() => {
-            this.onSend();
-          })
-      }
-      .width('100%')
-      .padding(12)
-      .backgroundColor(Color.White)
-    }
-    .width('100%')
-    .height('100%')
-  }
-
-  build() {
-    Column() {
-      if (this.configured) {
-        this.chatPanel()
-      } else {
-        this.setupPanel()
-      }
-    }
-    .width('100%')
-    .height('100%')
   }
 }
