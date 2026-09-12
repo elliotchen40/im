@@ -340,8 +340,8 @@ struct Index {
       this.toast('拿不到应用上下文');
       return;
     }
-    const r = await PhotoService.pickAndCache(ctx, 'avatar');
-    if (r.error.length > 0 && r.path.length === 0) {
+    const r = await PhotoService.pick(ctx, 'avatar');
+    if (r.error.length > 0 && r.uri.length === 0) {
       if (r.error !== '用户取消选择') {
         this.toast('选头像失败：' + r.error);
       }
@@ -349,8 +349,8 @@ struct Index {
     }
     const old = this.avatarPath;
     PhotoService.tryDelete(old);
-    AppConfig.setAvatarPath(r.path);
-    this.avatarPath = r.path;
+    AppConfig.setAvatarPath(r.uri);
+    this.avatarPath = r.uri;
   }
 
   private async onPickChatBg(): Promise<void> {
@@ -359,8 +359,8 @@ struct Index {
       this.toast('拿不到应用上下文');
       return;
     }
-    const r = await PhotoService.pickAndCache(ctx, 'chatbg');
-    if (r.error.length > 0 && r.path.length === 0) {
+    const r = await PhotoService.pick(ctx, 'chatbg');
+    if (r.error.length > 0 && r.uri.length === 0) {
       if (r.error !== '用户取消选择') {
         this.toast('选背景失败：' + r.error);
       }
@@ -368,8 +368,8 @@ struct Index {
     }
     const old = this.chatBgPath;
     PhotoService.tryDelete(old);
-    AppConfig.setChatBgPath(r.path);
-    this.chatBgPath = r.path;
+    AppConfig.setChatBgPath(r.uri);
+    this.chatBgPath = r.uri;
     this.bgVersion++;
   }
 
@@ -395,8 +395,8 @@ struct Index {
     if (ctx === undefined) {
       return;
     }
-    const r = await PhotoService.pickAndCache(ctx, 'attach');
-    if (r.path.length === 0) {
+    const r = await PhotoService.pick(ctx, 'attach');
+    if (r.uri.length === 0) {
       if (r.error !== '用户取消选择') {
         this.toast('选图失败：' + r.error);
       }
@@ -404,7 +404,7 @@ struct Index {
     }
     // 本地只把文件名写到输入框（完整图片发送需要服务端配合 base64
     // 入站；本次只占位提示，未来版本对接）
-    const fname: string = r.path.split('/').pop() ?? '';
+    const fname: string = (r.uri.split('/').pop() ?? r.uri.slice(-12));
     this.inputText = this.inputText + ' [图片:' + fname + ']';
     this.toast('图片已附加：' + fname);
   }
@@ -553,15 +553,15 @@ struct Index {
       height: SheetSize.FIT_CONTENT,
       dragBar: true,
       title: { title: '编辑个人资料' },
-      // 关键：sheetKeyboardAvoidMode 让 sheet 自己避让键盘，主布局不动
-      sheetKeyboardAvoidMode: SheetKeyboardAvoidMode.NONE,
+      // 字段名 keyboardAvoidMode，值类型用 SheetKeyboardAvoidMode（编译器的 did you mean 提示）
+      keyboardAvoidMode: SheetKeyboardAvoidMode.NONE,
       showClose: false
     })
     .bindSheet($$this.attachSheetOpen, this.attachSheetBuilder(), {
       height: SheetSize.FIT_CONTENT,
       dragBar: true,
       title: { title: '添加附件' },
-      sheetKeyboardAvoidMode: SheetKeyboardAvoidMode.NONE,
+      keyboardAvoidMode: SheetKeyboardAvoidMode.NONE,
       showClose: false
     })
   }

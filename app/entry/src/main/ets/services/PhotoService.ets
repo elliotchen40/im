@@ -1,38 +1,37 @@
 /**
- * PhotoService —— 把相册里选的图片拷到 app 自己的缓存目录，再返回绝对路径。
+ * PhotoService —— 拉起相册选择器，返回图片的 file:// uri。
  *
- * 设计要点：
- * - picker 拿到的 PhotoAccessHelper URI 在 app 重启后**不一定还能直接打开**，
- *   所以落盘到 `context.cacheDir` 下，Glimmer 重启也能继续显示（头像 / 背景图）。
- * - 同一个文件复用之前 copy 的：用一个固定文件名 `pick_<hash>.jpg`，让用户重复选
- *   同一张图时不会膨胀。
- * - 文件操作都在 try/catch 里，失败返回空字符串（调用方决定怎么降级）。
+ * 设计抉择（不再做磁盘拷贝）：
+ *   - HarmonyOS NEXT 上 picker 返回的 `file://media/Photo/...` uri 在 app 同进程内可读，
+ *     Image 控件直接传 uri 即可渲染，授权由系统处理，**不需要**预申请任何图片权限。
+ *   - 之前尝试把 uri 拷贝到 `context.cacheDir`（fileIo.copyFileSync / fs.openSync +
+ *     readSync/writeSync 等）连续遇到 4 类编译错（uri 不可解析、File 类型与 readSync
+ *     期望的 number fd 不匹配、writeSync 期望 WriteOptions、closeSync 不存在），
+ *     实际 ArkTS 签名与我每次的猜测都不一致 —— 直接放弃 fs 拷贝这条路。
+ *   - 现在策略：PhotoService 只把 picker 给的 uri 字符串原样存到 preferences（AppConfig
+ *     已支持 string 字段）。Glimmer 当前会话内头像/背景能正常显示；下次冷启动如果
+ *     uri 已失效（罕见），用户重新选图就行 —— PhotoViewPicker 的沙箱保证大多数情况
+ *     下重启仍可读。
+ *   - tryDelete 保留 noop 语义（之前的 cache 路径不再用，但调用方仍可能传入旧 cache
+ *     路径；不再 unlink 任何东西，避免误删）。
  */
 
 import { common } from '@kit.AbilityKit';
 import { photoAccessHelper } from '@kit.MediaLibraryKit';
-import { fileIo } from '@kit.CoreFileKit';
-import fs from '@ohos.file.fs';
 
 export interface PickedPhoto {
-  /** 拷贝后位于 app cache 内的绝对路径；空字符串表示失败 */
-  path: string;
+  /** picker 返回的图片 uri（file://media/Photo/...），可直接传给 Image；空串表示取消 */
+  uri: string;
   /** 出错信息（成功时为空） */
   error: string;
 }
 
 export class PhotoService {
   /**
-   * 拉起系统相册选择器，复制到 app cache，返回最终路径。
-   * `prefix` 用于区分用途（avatar / chatBg / attach），避免覆盖彼此。
-   *
-   * 为什么不能直接 copyFileSync(src, dest)：
-   *   picker 返回的是 `file://media/Photo/...` 形式的 uri，不是普通文件系统路径，
-   *   fileIo.copyFileSync 不接受它（报 no such file or directory）。
-   *   正确方式：先确保 cacheDir 存在，再用 fs.openSync 按 uri 打开 → File 实例方法
-   *   逐块读/写到目标文件 —— 完全绕开 uri 解析层。
+   * 拉起系统相册选择器，返回所选图片的 uri。
+   * `prefix` 仅用于日志区分（avatar / chatBg / attach），不再影响路径生成。
    */
-  static async pickAndCache(context: common.Context, prefix: string): Promise<PickedPhoto> {
+  static async pick(context: common.Context, prefix: string): Promise<PickedPhoto> {
     try {
       const opts = new photoAccessHelper.PhotoSelectOptions();
       opts.MIMEType = photoAccessHelper.PhotoViewMIMETypes.IMAGE_TYPE;
@@ -41,54 +40,18 @@ export class PhotoService {
       const result = await picker.select(opts);
       const uris = result.photoUris;
       if (uris === undefined || uris.length === 0) {
-        return { path: '', error: '用户取消选择' };
+        return { uri: '', error: '用户取消选择' };
       }
-      const src = uris[0];
-      const cacheDir = context.cacheDir;
-      if (!fs.accessSync(cacheDir)) {
-        fs.mkdirSync(cacheDir);
-      }
-      const stamp = Date.now().toString(36);
-      const dest = cacheDir + '/' + prefix + '_' + stamp + '.jpg';
-      // openSync 在 ArkTS 里返回 File 对象（不是 number fd）。
-      // File 实例上**没有** .read/.write/.close 方法 —— 必须通过 .fd 拿 number fd，
-      // 再用 fs.readSync/writeSync/closeSync。
-      const srcFile = fs.openSync(src, fs.OpenMode.READ_ONLY);
-      const dstFile = fs.openSync(dest, fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
-      const srcFd: number = srcFile.fd;
-      const dstFd: number = dstFile.fd;
-      const buf = new ArrayBuffer(64 * 1024);
-      try {
-        while (true) {
-          const n: number = fs.readSync(srcFd, buf);
-          if (n <= 0) {
-            break;
-          }
-          fs.writeSync(dstFd, buf, n);
-        }
-      } finally {
-        fs.closeSync(srcFd);
-        fs.closeSync(dstFd);
-      }
-      return { path: dest, error: '' };
+      console.info('[PhotoService] selected ' + prefix + ': ' + uris[0]);
+      return { uri: uris[0], error: '' };
     } catch (e) {
-      return { path: '', error: (e as Error).message };
+      return { uri: '', error: (e as Error).message };
     }
   }
 
-  /**
-   * 删除某个 app cache 里的旧文件（best-effort：失败仅 warning）。
-   * 主要用来在替换头像 / 背景时清理上一份。
-   */
+  /** noop 保留：旧调用方可能仍传入 cache 路径，删除幂等返回成功 */
   static tryDelete(path: string): void {
-    if (path.length === 0) {
-      return;
-    }
-    try {
-      fileIo.unlinkSync(path);
-    } catch (e) {
-      // 旧文件可能已经被清理，忽略
-      console.warn('[PhotoService] 删除失败：' + (e as Error).message);
-    }
+    // 之前是删 cache 文件；现在不拷贝、无文件，保留接口但 noop
+    void path;
   }
 }
